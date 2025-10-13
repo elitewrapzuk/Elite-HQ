@@ -1873,11 +1873,20 @@
       });
     })();
 
-    document.getElementById('awayBtn').addEventListener('click', ()=>{
+    // robust away button handler: attach directly or use delegated fallback
+    function openAwayOverlay(){
+      if(!away) return;
       away.style.display='flex';
-      pinInput.value='';
-      pinInput.focus();
-    });
+      try{ pinInput.value=''; pinInput.focus(); }catch(e){}
+      if(typeof showToast === 'function') showToast('Privacy enabled', {type:'success'});
+    }
+    const awayBtnEl = document.getElementById('awayBtn');
+    if(awayBtnEl){
+      awayBtnEl.addEventListener('click', openAwayOverlay);
+    } else {
+      // fallback: delegate from document in case the button is dynamically replaced
+      document.addEventListener('click', (e)=>{ if(e.target && e.target.closest && e.target.closest('#awayBtn')) openAwayOverlay(); });
+    }
 
     function tryUnlock(){
       if(pinInput.value.length===6){
