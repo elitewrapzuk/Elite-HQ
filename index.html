@@ -1092,12 +1092,14 @@
     // Initialize drag and keyboard handlers
     enableNavDrag();
 
-    // Menu open/close for mobile
-    const menuBtn = document.getElementById('menuBtn');
-    const sidebar = document.getElementById('sidebar');
-    const closeMobileBtn = document.getElementById('closeMobileBtn');
-    if(menuBtn){ menuBtn.addEventListener('click', ()=> sidebar.classList.toggle('open')); }
-    if(closeMobileBtn){ closeMobileBtn.addEventListener('click', ()=> sidebar.classList.remove('open')); }
+    // Menu open/close for mobile (attach after DOM ready)
+    document.addEventListener('DOMContentLoaded', function() {
+      const menuBtn = document.getElementById('menuBtn');
+      const sidebar = document.getElementById('sidebar');
+      const closeMobileBtn = document.getElementById('closeMobileBtn');
+      if(menuBtn && sidebar){ menuBtn.addEventListener('click', ()=> sidebar.classList.toggle('open')); }
+      if(closeMobileBtn && sidebar){ closeMobileBtn.addEventListener('click', ()=> sidebar.classList.remove('open')); }
+    });
 
     // ensure clicking a nav link closes sidebar on mobile
     $$('#nav a').forEach(a=> a.addEventListener('click', ()=>{ if(window.innerWidth <= 980) sidebar.classList.remove('open'); }));
@@ -1666,7 +1668,7 @@
     })();
 
     /************ Nav/Menu + Init ************/
-    document.getElementById('menuBtn')?.addEventListener('click',()=>document.getElementById('sidebar').classList.toggle('open'));
+  // (moved above, attached after DOMContentLoaded)
     route();           // render initial view
     hydrateInlineIcons(); // ensure topbar/sidebar icons render on first load
 
