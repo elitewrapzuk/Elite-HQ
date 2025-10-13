@@ -274,11 +274,12 @@
         <div class="logo-title">Elite HQ</div>
       </div>
       <nav class="nav" id="nav">
-        <a href="#/dashboard" data-route="dashboard" class="active"><span class="ico" data-ico="home"></span>Dashboard</a>
-        <a href="#/contacts" data-route="contacts"><span class="ico" data-ico="user"></span>Contacts</a>
-        <a href="#/projects" data-route="projects"><span class="ico" data-ico="folder"></span>Projects</a>
-        <a href="#/calendar" data-route="calendar"><span class="ico" data-ico="calendar"></span>Calendar</a>
-        <a href="#/suppliers" data-route="suppliers"><span class="ico" data-ico="shield"></span>Suppliers</a>
+  <a href="#/dashboard" data-route="dashboard" class="active"><span class="ico" data-ico="home"></span>Dashboard</a>
+  <a href="#/contacts" data-route="contacts"><span class="ico" data-ico="user"></span>Contacts</a>
+  <a href="#/projects" data-route="projects"><span class="ico" data-ico="folder"></span>Projects</a>
+  <a href="#/calendar" data-route="calendar"><span class="ico" data-ico="calendar"></span>Calendar</a>
+  <a href="#/suppliers" data-route="suppliers"><span class="ico" data-ico="shield"></span>Suppliers</a>
+  <a href="#/email" data-route="email"><span class="ico" data-ico="mail"></span>Email</a>
       </nav>
     </aside>
 
@@ -482,7 +483,86 @@
     }
 
     /************ Router ************/
-    const routes = { dashboard: renderDashboard, contacts: renderContacts, projects: renderProjects, calendar: renderCalendar, suppliers: renderSuppliers };
+  const routes = { dashboard: renderDashboard, contacts: renderContacts, projects: renderProjects, calendar: renderCalendar, suppliers: renderSuppliers, email: renderEmail };
+    // --- EMAIL VIEW ---
+    const EMAIL_TEMPLATES = [
+      { name: 'Blank', subject: '', body: '' },
+      { name: 'Intro', subject: 'Introduction from Elite HQ', body: 'Hi [Name],\n\nI wanted to introduce myself and our company...' },
+      { name: 'Follow Up', subject: 'Following up', body: 'Hi [Name],\n\nJust checking in regarding our previous conversation...' },
+    ];
+
+    function renderEmail() {
+      const view = document.getElementById('view');
+      view.innerHTML = '';
+      const container = document.createElement('div');
+      container.className = 'card pad';
+      container.innerHTML = `
+        <h2 style="margin-top:0">Compose Email</h2>
+        <div class="row" style="gap:18px;align-items:flex-start;flex-wrap:wrap">
+          <div style="flex:2;min-width:320px">
+            <label>To:<input class="input" id="emailTo" type="email" placeholder="recipient@email.com" required></label><br>
+            <label>Subject:<input class="input" id="emailSubject" type="text" placeholder="Subject"></label><br>
+            <label>Template:
+              <select class="input" id="emailTemplate">
+                ${EMAIL_TEMPLATES.map((t,i)=>`<option value="${i}">${t.name}</option>`).join('')}
+              </select>
+            </label><br>
+            <label>Body:<textarea class="input" id="emailBody" rows="8" placeholder="Write your email..."></textarea></label><br>
+            <label>Attachments:<input class="input" id="emailFiles" type="file" multiple></label><br>
+            <button class="btn primary" id="sendEmailBtn">Send Email</button>
+          </div>
+          <div style="flex:1;min-width:220px">
+            <div class="section-title">Templates</div>
+            <ul id="templateList" style="list-style:none;padding:0;margin:0;">
+              ${EMAIL_TEMPLATES.map((t,i)=>`<li><button class="chip" data-tpl="${i}">${t.name}</button></li>`).join('')}
+            </ul>
+          </div>
+        </div>
+        <div class="hint" style="margin-top:10px">Emails are sent via Google Apps Script. Attachments supported.</div>
+      `;
+      view.appendChild(container);
+
+      // Template selection logic
+      const templateSel = document.getElementById('emailTemplate');
+      const subjectEl = document.getElementById('emailSubject');
+      const bodyEl = document.getElementById('emailBody');
+      templateSel.addEventListener('change', e => {
+        const t = EMAIL_TEMPLATES[+e.target.value];
+        subjectEl.value = t.subject;
+        bodyEl.value = t.body;
+      });
+      document.getElementById('templateList').addEventListener('click', e => {
+        if(e.target.matches('button[data-tpl]')){
+          const t = EMAIL_TEMPLATES[+e.target.dataset.tpl];
+          subjectEl.value = t.subject;
+          bodyEl.value = t.body;
+          templateSel.value = e.target.dataset.tpl;
+        }
+      });
+
+      // Send email (calls Google Apps Script endpoint)
+      document.getElementById('sendEmailBtn').addEventListener('click', async () => {
+        const to = document.getElementById('emailTo').value;
+        const subject = subjectEl.value;
+        const body = bodyEl.value;
+        const files = document.getElementById('emailFiles').files;
+        if(!to){ showToast('Recipient required'); return; }
+        const formData = new FormData();
+        formData.append('to', to);
+        formData.append('subject', subject);
+        formData.append('body', body);
+        for(let i=0;i<files.length;i++){
+          formData.append('attachments', files[i]);
+        }
+        // TODO: Replace with your deployed Google Apps Script web app URL
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzX0fCROXoQqcaqTYJowzG0nHnLpnuuX3eGa8J-VsJ_zupupPs1ENlbBPTvf6WltgUMIw/exec';
+        try {
+          const res = await fetch(APPS_SCRIPT_URL, { method:'POST', body:formData });
+          if(res.ok) showToast('Email sent!');
+          else showToast('Send failed');
+        } catch(e){ showToast('Send error'); }
+      });
+    }
     function route(){
       const hash = location.hash.replace('#/','') || 'dashboard';
       $$('#nav a').forEach(a=>a.classList.toggle('active', a.dataset.route===hash));
