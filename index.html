@@ -783,7 +783,34 @@
         }
 
         let editing = null;
-        function renderList(){ const arr = loadTemplates(); listWrap.innerHTML=''; if(!arr.length) listWrap.append(el('div',{class:'empty',html:'No templates yet'})); arr.forEach((t,i)=>{ const row = el('div',{style:'display:flex;align-items:center;justify-content:space-between;gap:8px'},[ el('div',{style:'flex:1'},[ el('strong',{},[document.createTextNode(t.name)]), el('div',{class:'muted',style:'font-size:12px;white-space:pre-wrap'},[document.createTextNode((t.body||'').slice(0,120)||'')]) ]), el('div',{style:'display:flex;gap:8px'},[ el('button',{class:'chip',onclick:()=>{ editing=i; const titleEl = document.getElementById('settingsTplTitle'); const bodyEl = document.getElementById('settingsTplBody'); if(titleEl) titleEl.value = t.name; if(bodyEl) bodyEl.value = t.body||''; }},[document.createTextNode('Edit')]), el('button',{class:'chip',onclick:()=>{ if(confirm('Delete template?')){ const a = loadTemplates(); a.splice(i,1); saveTemplates(a); renderList(); if(typeof showToast === 'function') showToast('Template deleted'); } }},[document.createTextNode('Delete')]) ]) ]); listWrap.append(row); }); }
+        function renderList(){
+          const arr = loadTemplates();
+          listWrap.innerHTML='';
+          if(!arr.length) listWrap.append(el('div',{class:'empty',html:'No templates yet'}));
+          arr.forEach((t,i)=>{
+            const left = el('div',{style:'flex:1'},[ el('strong',{},[document.createTextNode(t.name)]), el('div',{class:'muted',style:'font-size:12px;white-space:pre-wrap'},[document.createTextNode((t.body||'').slice(0,120)||'')]) ]);
+            const actionsWrap = el('div',{style:'display:flex;gap:8px'},[]);
+            const editBtn = el('button',{class:'chip'},[document.createTextNode('Edit')]);
+            editBtn.addEventListener('click', ()=>{
+              editing = i;
+              const titleEl = document.getElementById('settingsTplTitle');
+              const bodyEl = document.getElementById('settingsTplBody');
+              if(titleEl) titleEl.value = t.name;
+              if(bodyEl) bodyEl.value = t.body||'';
+              if(titleEl) titleEl.focus();
+            });
+            const delBtn = el('button',{class:'chip'},[document.createTextNode('Delete')]);
+            delBtn.addEventListener('click', ()=>{
+              if(!confirm('Delete template?')) return;
+              const a = loadTemplates(); a.splice(i,1); saveTemplates(a); renderList();
+              if(typeof showToast === 'function') showToast('Template deleted');
+              console.log('Template deleted', i, t.name);
+            });
+            actionsWrap.append(editBtn, delBtn);
+            const row = el('div',{style:'display:flex;align-items:center;justify-content:space-between;gap:8px'},[ left, actionsWrap ]);
+            listWrap.append(row);
+          });
+        }
 
         newBtn.addEventListener('click', ()=>{ editing=null; const titleEl = document.getElementById('settingsTplTitle'); const bodyEl = document.getElementById('settingsTplBody'); if(titleEl) titleEl.value=''; if(bodyEl) bodyEl.value=''; if(titleEl) titleEl.focus(); });
         const cancelBtn = document.getElementById('settingsCancelTplBtn'); if(cancelBtn) cancelBtn.addEventListener('click', ()=>{ editing=null; const titleEl = document.getElementById('settingsTplTitle'); const bodyEl = document.getElementById('settingsTplBody'); if(titleEl) titleEl.value=''; if(bodyEl) bodyEl.value=''; });
@@ -1409,10 +1436,19 @@
       list.forEach((t,i)=>{
         const row = el('div',{style:'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px'});
         row.append(el('div',{html:`<strong>${t.name}</strong><div class="muted" style="font-size:12px;white-space:pre-wrap">${(t.subject||'')}</div>` }));
-        const actions = el('div',{style:'display:flex;gap:8px'},[
-          el('button',{class:'chip',onclick:()=>{ editingIndex=i; tplTitle.value=t.name; tplBody.value=t.body||''; editor.style.display='block'; tplTitle.focus(); }},[document.createTextNode('Edit')]),
-          el('button',{class:'chip',onclick:()=>{ if(confirm('Delete template?')){ const arr=loadTemplates(); arr.splice(i,1); saveTemplates(arr); renderTemplatesList(); } }},[document.createTextNode('Delete')])
-        ]);
+        const actions = el('div',{style:'display:flex;gap:8px'},[]);
+        const editBtn = el('button',{class:'chip'},[document.createTextNode('Edit')]);
+        editBtn.addEventListener('click', ()=>{
+          editingIndex=i; tplTitle.value=t.name; tplBody.value=t.body||''; editor.style.display='block'; tplTitle.focus();
+        });
+        const delBtn = el('button',{class:'chip'},[document.createTextNode('Delete')]);
+        delBtn.addEventListener('click', ()=>{
+          if(!confirm('Delete template?')) return;
+          const arr = loadTemplates(); arr.splice(i,1); saveTemplates(arr); renderTemplatesList();
+          if(typeof showToast === 'function') showToast('Template deleted');
+          console.log('Deleted template', i, t.name);
+        });
+        actions.append(editBtn, delBtn);
         row.append(actions);
         templatesList.append(row);
       });
