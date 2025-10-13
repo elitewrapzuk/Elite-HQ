@@ -1883,10 +1883,29 @@
     const awayBtnEl = document.getElementById('awayBtn');
     if(awayBtnEl){
       awayBtnEl.addEventListener('click', openAwayOverlay);
+      // diagnostic check: log visibility and hit-test
+      try{
+        const cs = getComputedStyle(awayBtnEl);
+        console.log('awayBtn found — visible?', cs.display!=='none' && cs.visibility!=='hidden', 'offset', awayBtnEl.offsetWidth, awayBtnEl.offsetHeight);
+        const r = awayBtnEl.getBoundingClientRect();
+        const midX = Math.round(r.left + r.width/2);
+        const midY = Math.round(r.top + r.height/2);
+        const top = document.elementFromPoint(midX, midY);
+        console.log('awayBtn hit-test top element:', top && (top.id || top.className || top.tagName));
+      }catch(e){ console.warn('awayBtn diagnostic failed', e); }
     } else {
       // fallback: delegate from document in case the button is dynamically replaced
       document.addEventListener('click', (e)=>{ if(e.target && e.target.closest && e.target.closest('#awayBtn')) openAwayOverlay(); });
     }
+
+    // Close on Escape and add keyboard shortcut Ctrl/Cmd+L to open
+    document.addEventListener('keydown', (e)=>{
+      if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='l'){ openAwayOverlay(); e.preventDefault(); }
+      if(e.key==='Escape' && away && away.style.display==='flex'){ away.style.display='none'; }
+    });
+
+    // clicking backdrop/outside the panel closes overlay
+    if(away){ away.addEventListener('click', (e)=>{ if(e.target === away) { away.style.display='none'; } }); }
 
     function tryUnlock(){
       if(pinInput.value.length===6){
