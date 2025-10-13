@@ -248,6 +248,10 @@
     .toast .close{margin-left:auto;cursor:pointer;opacity:.8}
     .away .panel{position:relative;width:min(560px,92vw);padding:28px;border-radius:18px;backdrop-filter: blur(22px);background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow-md);text-align:center}
     .away .mark{width:64px;height:64px;border-radius:16px;margin:0 auto 12px auto;background:#0f172a;color:#01FABF;display:grid;place-items:center;font-weight:900;box-shadow:inset 0 0 0 3px rgba(1,250,191,.35);overflow:hidden}
+  .away .confirm{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:120}
+  .away .confirm .check{width:120px;height:120px;border-radius:999px;background:linear-gradient(135deg,#22c55e,#10b981);display:grid;place-items:center;color:#fff;font-size:46px;transform:scale(.6);opacity:0;transition:transform .35s cubic-bezier(.2,.9,.2,1),opacity .25s ease}
+  .away.show-confirm .confirm{display:flex}
+  .away.show-confirm .confirm .check{transform:scale(1);opacity:1}
     .away .mark img{width:100%;height:100%;object-fit:cover;display:none}
     [data-theme="dark"] .away .mark{background:#01FABF;color:#001014;box-shadow:inset 0 0 0 3px rgba(0,16,20,.35)}
     .away h1{margin:0 0 6px 0;font-size:24px}
@@ -959,15 +963,40 @@
       const box = el('div',{});
       const grid = el('div',{class:'links-grid'});
       db.links.forEach(link=>grid.append(quickLinkCard(link)));
+      // enable drag within quick links grid for reordering
+      grid.addEventListener('dragstart', (e)=>{
+        const a = e.target.closest('.ql-card'); if(!a) return;
+        e.dataTransfer.setData('text/plain', a.dataset.id || '');
+        a.classList.add('dragging');
+      });
+      grid.addEventListener('dragend', (e)=>{ const a = e.target.closest('.ql-card'); if(a) a.classList.remove('dragging'); });
+      grid.addEventListener('dragover', (e)=>{ e.preventDefault(); const over = e.target.closest('.ql-card'); $$('.ql-card',grid).forEach(x=>x.classList.remove('drag-over')); if(over) over.classList.add('drag-over'); });
+      grid.addEventListener('dragleave', (e)=>{ const over = e.target.closest('.ql-card'); if(over) over.classList.remove('drag-over'); });
+      grid.addEventListener('drop', (e)=>{
+        e.preventDefault(); const draggedId = e.dataTransfer.getData('text/plain'); if(!draggedId) return;
+        const over = e.target.closest('.ql-card'); if(!over) return;
+        const targetId = over.dataset.id;
+        const fromIdx = db.links.findIndex(x=>x.id===draggedId);
+        const toIdx = db.links.findIndex(x=>x.id===targetId);
+        if(fromIdx<0||toIdx<0||fromIdx===toIdx) return;
+        const [item] = db.links.splice(fromIdx,1);
+        db.links.splice(toIdx,0,item);
+        persist(); renderQuickLinksSectionRefresh(grid);
+        renderNav(); hydrateInlineIcons();
+      });
       const tools = el('div',{class:'toolbar', style:'margin-top:10px'},[
         el('button',{class:'chip', onclick:()=>openLinkModal()},[document.createTextNode('+ Add Link')])
       ]);
       box.append(grid, tools);
       return box;
     }
+
+    function renderQuickLinksSectionRefresh(grid){
+      grid.innerHTML=''; db.links.forEach(link=> grid.append(quickLinkCard(link)));
+    }
     function quickLinkCard(link){
       const color = link.color || 'neutral';
-      const card = el('a',{href:link.url,target:'_blank',class:'ql-card','data-color':color,onclick:(e)=>{
+      const card = el('a',{href:link.url,target:'_blank',class:'ql-card','data-color':color,'data-id':link.id, draggable:'true', onclick:(e)=>{
         if(e.target.closest('.ql-actions')){ e.preventDefault(); }
       }},[
         el('div',{class:'ql-actions'},[
@@ -1444,8 +1473,8 @@
         const delBtn = el('button',{class:'chip'},[document.createTextNode('Delete')]);
         delBtn.addEventListener('click', ()=>{
           if(!confirm('Delete template?')) return;
-          const arr = loadTemplates(); arr.splice(i,1); saveTemplates(arr); renderTemplatesList();
-          if(typeof showToast === 'function') showToast('Template deleted');
+          const arr = loadTemplates(); arr.splice(i,1); saveTemplates(arr); renderTemplatesList(); renderEmail();
+            if(typeof showToast === 'function') showToast('Template deleted');
           console.log('Deleted template', i, t.name);
         });
         actions.append(editBtn, delBtn);
@@ -1464,6 +1493,8 @@
       if(editingIndex==null){ arr.push({ name, subject:'', body }); }
       else { arr[editingIndex].name = name; arr[editingIndex].body = body; }
       saveTemplates(arr); renderTemplatesList(); editor.style.display='none'; editingIndex=null; showToast('Template saved');
+      // update any open Email view immediately
+      try{ renderEmail(); }catch(e){}
     });
 
     // open templates via Alt+T global shortcut
@@ -2043,8 +2074,19 @@
     function tryUnlock(){
       if(pinInput.value.length===6){
         if(pinInput.value===PIN){
-          away.style.display='none';
-          pinInput.value='';
+          // show confirmation animation then close
+          document.getElementById('awayOverlay').classList.add('show-confirm');
+          // create confirm node if not present
+          if(!document.querySelector('#awayOverlay .confirm')){
+            const c = document.createElement('div'); c.className='confirm'; c.innerHTML = `<div class="check">✓</div>`;
+            document.getElementById('awayOverlay').appendChild(c);
+          }
+          setTimeout(()=>{
+            const overlay = document.getElementById('awayOverlay');
+            overlay.classList.remove('show-confirm');
+            overlay.style.display='none';
+            pinInput.value='';
+          }, 700);
         } else {
           const p = pinInput;
           p.classList.remove('shake'); void p.offsetWidth; p.classList.add('shake');
