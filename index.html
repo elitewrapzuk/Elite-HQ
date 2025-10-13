@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Elite HQ — Wrap Command Center</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* THEME TOKENS (Minimal Glass) */
+    :root{
+      --brand:#01FABF;
+      --bg:#f6f8fb;
+      --surface:#ffffffcc; /* glass */
+      --ink:#0f172a;
+      --muted:#5b6474;
+      --line:#e7edf4;
+      --radius:14px;
+      --shadow-sm:0 4px 14px rgba(2,6,23,.06);
+      --shadow-md:0 10px 30px rgba(2,6,23,.08);
+      --focus:0 0 0 3px rgba(1,250,191,.35);
+      --banner-grad:linear-gradient(90deg,#01FABF,#00B5FF);
+      --nav-hover:#eef3f8;
+      --btn:#0f172a;
+      --btn-ink:#ffffff;
+      --glass-ring:inset 0 1px 0 rgba(255,255,255,.6), inset 0 -1px 0 rgba(0,0,0,.03);
+    }
+    [data-theme="dark"]{
+      --bg:#0b0f14;
+      --surface:#0f1520cc;
+      --ink:#e6eef6;
+      --muted:#a8b3c4;
+      --line:#1f2733;
+      --shadow-sm:0 4px 14px rgba(0,0,0,.35);
+      --shadow-md:0 14px 36px rgba(0,0,0,.5);
+      --focus:0 0 0 3px rgba(1,250,191,.25);
+      --banner-grad:linear-gradient(90deg,#018E77,#00A4E8);
+      --nav-hover:#0f1520;
+      --btn:#01FABF;
+      --btn-ink:#001014;
+      --glass-ring:inset 0 1px 0 rgba(255,255,255,.08), inset 0 -1px 0 rgba(0,0,0,.35);
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);font-family:Inter,system-ui,Segoe UI,Arial,sans-serif;color:var(--ink)}
+    body{transition:background .3s ease,color .3s ease}
+    .app{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+
+    /* SIDEBAR (Glass) */
+    .sidebar{backdrop-filter: blur(14px);background:var(--surface);border-right:1px solid var(--line);padding:16px 12px;position:sticky;top:0;height:100vh;transition:background .3s ease,border-color .3s ease;box-shadow:var(--glass-ring)}
+    .logo{display:flex;align-items:center;gap:10px;padding:8px 8px 14px 8px}
+    .logo-mark{width:36px;height:36px;border-radius:10px;background:#0f172a;display:grid;place-items:center;color:#01FABF;font-weight:900;letter-spacing:.5px;transition:background .3s ease,color .3s ease,box-shadow .3s ease;box-shadow:inset 0 0 0 2px rgba(1,250,191,.35);overflow:hidden}
+    .logo-mark img{width:100%;height:100%;object-fit:cover;display:none}
+    .logo-title{font-weight:800}
+    [data-theme="dark"] .logo-mark{background:#01FABF;color:#001014;box-shadow:inset 0 0 0 2px rgba(0,16,20,.35)}
+    .nav{margin-top:4px;display:flex;flex-direction:column;gap:6px}
+    .nav a{display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;color:var(--ink);text-decoration:none;font-weight:600;font-size:13.5px;transition:background .2s ease,color .2s ease}
+    .nav a:hover{background:var(--nav-hover)}
+    .nav a.active{background:var(--ink);color:#fff}
+    .nav a .ico{width:18px;height:18px;display:inline-block;color:currentColor}
+
+    /* TOP BAR (Glass) */
+    .main{display:flex;flex-direction:column;min-width:0}
+    .topbar{height:58px;backdrop-filter: blur(12px);background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 14px;gap:10px;position:sticky;top:0;z-index:5;transition:background .3s ease,border-color .3s ease;box-shadow:var(--glass-ring)}
+    .crumb{color:var(--muted);font-weight:600;font-size:13px}
+    .page-title{font-weight:800}
+    .spacer{flex:1}
+    .top-actions{display:flex;align-items:center;gap:8px}
+    .icon-btn{height:34px;padding:0 10px;border-radius:999px;border:1px solid var(--line);background:transparent;display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;font-size:13px;transition:background .2s ease,color .2s ease,border-color .2s ease;box-shadow:var(--shadow-sm)}
+    .icon-btn:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+    .top-actions .divider{width:1px;height:22px;background:var(--line);margin:0 2px}
+    .switch{position:relative;width:48px;height:26px;background:var(--nav-hover);border-radius:16px;cursor:pointer;transition:background .25s ease;border:1px solid var(--line)}
+    .switch .knob{position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:var(--shadow-sm);transition:left .25s ease,background .3s ease}
+    [data-theme="dark"] .switch{background:#06202a}
+    [data-theme="dark"] .switch .knob{left:24px;background:#0b1520}
+    .top-logo{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:#0f172a;color:#01FABF;font-weight:900;overflow:hidden;border:1px solid var(--line)}
+    .top-logo img{width:100%;height:100%;object-fit:cover;display:none}
+
+    /* LAYOUT */
+    .container{padding:18px;max-width:1180px}
+    .card{backdrop-filter: blur(10px);background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm);transition:background .3s ease,border-color .3s ease,box-shadow .3s ease}
+    .pad{padding:14px}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+
+    /* CALENDAR */
+    .calendar-page{display:grid;gap:12px}
+    .calendar-card{display:grid;gap:12px}
+    .calendar-header{display:flex;align-items:center;justify-content:space-between}
+    .calendar-header h2{margin:0;font-size:20px;font-weight:800}
+    .calendar-nav{display:flex;gap:8px}
+    .calendar-nav .btn{height:32px;padding:0 12px;border-radius:999px;font-size:12.5px}
+    .calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+    .calendar-day{display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--muted);text-transform:uppercase;font-size:11px}
+    .calendar-cell{border:1px solid var(--line);border-radius:12px;min-height:110px;padding:10px;display:grid;align-content:flex-start;gap:6px;background:var(--surface);position:relative;box-shadow:var(--glass-ring)}
+    .calendar-cell.today{border-color:rgba(1,250,191,.6);box-shadow:0 0 0 2px rgba(1,250,191,.18) inset, var(--glass-ring)}
+    .calendar-date{font-weight:800;font-size:14px}
+    .calendar-date.muted{color:var(--muted);font-weight:600}
+    .calendar-events{display:grid;gap:6px}
+    .calendar-event{border-radius:10px;padding:6px 8px;background:linear-gradient(135deg,rgba(1,250,191,.16),rgba(0,181,255,.12));border:1px solid rgba(1,250,191,.35);font-size:12.5px;font-weight:600;cursor:pointer;transition:transform .12s ease,box-shadow .2s ease}
+    .calendar-event:hover{transform:translateY(-1px);box-shadow:var(--shadow-sm)}
+    .calendar-event[data-type="project"]{background:linear-gradient(135deg,rgba(59,130,246,.14),rgba(14,116,144,.12));border-color:rgba(59,130,246,.35)}
+    .calendar-sidebar{display:grid;gap:10px}
+    .event-list{display:grid;gap:10px}
+    .event-card{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface);box-shadow:var(--glass-ring);display:grid;gap:8px}
+    .event-card h3{margin:0;font-size:15px;font-weight:800}
+    .event-meta{color:var(--muted);font-size:12.5px}
+    .event-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .calendar-layout{display:grid;grid-template-columns:2fr 1fr;gap:12px}
+    @media(max-width:1100px){.calendar-layout{grid-template-columns:1fr}}
+    @media(max-width:640px){.calendar-grid{grid-template-columns:repeat(2,1fr)}.calendar-day{display:none}}
+
+    /* BANNER */
+    .welcome{padding:18px;border-radius:16px;background:var(--banner-grad);color:#001014;box-shadow:var(--shadow-md)}
+    .welcome h2{margin:0 0 2px 0;font-size:22px;font-weight:800}
+    .welcome p{margin:0;font-weight:600;opacity:.95;font-size:13.5px}
+
+    /* STATS */
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .stat{display:flex;align-items:center;gap:10px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+    .badge{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;box-shadow:var(--glass-ring)}
+    .val{font-weight:800;font-size:18px}
+    .muted{color:var(--muted)}
+
+    /* QUICK LINKS — refined */
+    .section-title{font-weight:800;margin-bottom:8px;font-size:14px}
+    .links-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    @media (max-width:980px){ .links-grid{grid-template-columns:repeat(2,1fr)}}
+    @media (max-width:640px){ .links-grid{grid-template-columns:1fr}}
+    .ql-card{
+      position:relative;border-radius:14px;border:1.5px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.78),rgba(255,255,255,.55));
+      min-height:118px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;
+      transition:transform .16s ease, box-shadow .16s ease, border-color .2s ease, background .3s ease;
+      box-shadow:var(--shadow-sm);
+      text-decoration:none;color:inherit; overflow:hidden;
+    }
+    [data-theme="dark"] .ql-card{background:linear-gradient(180deg,rgba(15,21,32,.9),rgba(15,21,32,.72));}
+    .ql-card:hover{transform:translateY(-2px); box-shadow:var(--shadow-md)}
+    .ql-card[data-color="red"]{border-color:#ef4444}
+    .ql-card[data-color="blue"]{border-color:#3b82f6}
+    .ql-card[data-color="green"]{border-color:#22c55e}
+    .ql-card[data-color="yellow"]{border-color:#eab308}
+    .ql-card[data-color="purple"]{border-color:#8b5cf6}
+    .ql-card .icon-badge{
+      width:54px;height:54px;border-radius:14px;display:grid;place-items:center;
+      background:linear-gradient(135deg,rgba(1,250,191,.10),rgba(0,181,255,.06));
+      box-shadow:var(--glass-ring);
+    }
+    .ql-title{font-weight:800;font-size:13.5px}
+    .ql-ext{position:absolute;left:10px;bottom:8px;font-size:16px;opacity:.6}
+    .ql-actions{position:absolute;right:8px;top:8px;display:flex;gap:6px}
+    .chip{height:30px;padding:0 10px;border-radius:999px;border:1px solid var(--line);background:transparent;display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;font-size:12.5px;transition:background .2s ease,color .2s ease,border-color .2s ease}
+    .chip:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+    .toolbar{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+
+    /* ICONS (outline set) */
+    .icon{width:22px;height:22px;display:block;color:currentColor;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+    /* TABLES & FORMS */
+    .table{width:100%;border-collapse:separate;border-spacing:0 8px}
+    .table th{color:var(--muted);font-weight:600;text-align:left;padding:6px 10px;font-size:12.5px}
+    .table td{background:var(--surface);border:1px solid var(--line);padding:12px 10px;font-size:13.5px}
+    .input, select, textarea{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);transition:border-color .2s ease, background .3s ease,color .3s ease}
+    .input:focus, select:focus, textarea:focus{outline:none;box-shadow:var(--focus);border-color:transparent}
+    .search{display:flex;gap:10px;align-items:center}
+    .search .input{flex:1}
+    .empty{color:var(--muted);text-align:center;padding:20px 0}
+
+    /* SUPPLIERS (full-width frosted tiles) */
+    .supplier-list{display:grid;gap:10px}
+    .supplier-tile{
+      display:grid;grid-template-columns:62px 1fr auto;align-items:center;gap:12px;
+      border:1px solid var(--line);background:var(--surface);backdrop-filter: blur(10px);
+      border-radius:14px;padding:10px;box-shadow:var(--shadow-sm);
+      cursor:pointer;transition:transform .2s ease, box-shadow .3s ease, border-color .2s ease;
+    }
+    .supplier-tile:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(1,250,191,.2);border-color:rgba(1,250,191,.5)}
+    .supplier-logo{width:62px;height:62px;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,rgba(1,250,191,.12),rgba(0,181,255,.08));display:grid;place-items:center;border:1px solid var(--line)}
+    .supplier-logo img{max-width:100%;max-height:100%;object-fit:contain}
+    .supplier-meta{min-width:0}
+    .supplier-name{font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .supplier-url{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .supplier-actions{display:flex;gap:8px}
+
+    /* CONTACT CARDS */
+    .contact-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+    @media (max-width:980px){.contact-grid{grid-template-columns:1fr}}
+    .contact-card{
+      border:1px solid var(--line);background:var(--surface);border-radius:14px;
+      padding:12px;box-shadow:var(--shadow-sm);
+      display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;
+      cursor:pointer;transition:transform .16s ease, box-shadow .2s ease, border-color .2s ease;
+    }
+    .contact-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:rgba(1,250,191,.4)}
+    .contact-name{font-weight:800;font-size:15px}
+    .contact-meta{color:var(--muted);font-size:12.5px;margin-top:2px}
+    .contact-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+    .btn.sm{height:28px;padding:0 10px;font-size:12px;border-radius:8px}
+
+    /* MODALS (scrollable, wide landscape option) */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,.45);display:none;align-items:center;justify-content:center;z-index:50;animation:fade .2s ease}
+    [data-theme="dark"] .modal-backdrop{background:rgba(0,0,0,.55)}
+    .modal{
+      width:min(680px,94vw);
+      max-height:90vh;
+      display:flex;flex-direction:column;
+      backdrop-filter: blur(14px);background:var(--surface);
+      border-radius:16px;border:1px solid var(--line);box-shadow:var(--shadow-md);
+      transition:background .3s ease,border-color .3s ease
+    }
+    .modal.wide{ width:min(980px,96vw) }
+    .modal header{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+    .modal header h3{margin:0;font-size:18px}
+    .modal .body{padding:14px 16px;display:grid;gap:10px;overflow:auto;flex:1 1 auto}
+    .modal .footer{padding:12px 16px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px;flex:0 0 auto}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:900px){ .grid-2{grid-template-columns:1fr} }
+
+    .btn{height:34px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:transparent;cursor:pointer;font-weight:700;font-size:13px;transition:background .2s ease,color .2s ease,border-color .2s ease;display:inline-flex;align-items:center;gap:8px}
+    .btn.primary{background:var(--btn);color:var(--btn-ink);border-color:var(--btn)}
+    .btn.danger{background:#ef4444;color:#fff;border-color:#ef4444}
+    .close-x{cursor:pointer;font-weight:800;color:var(--muted)}
+    .hint{color:var(--muted);font-size:12.5px}
+
+    /* ICON PICKER */
+    .icon-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+    .icon-option{border:1px solid var(--line);border-radius:12px;background:var(--surface);display:grid;place-items:center;padding:10px;cursor:pointer;transition:transform .12s ease,border-color .2s ease, background .2s ease}
+    .icon-option:hover{transform:translateY(-1px)}
+    .icon-option.selected{border-color:var(--brand);box-shadow:0 0 0 3px rgba(1,250,191,.25) inset}
+
+    /* AWAY MODE 2.0 */
+    .away{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:100;
+      background: radial-gradient(ellipse at 30% 20%, rgba(1,250,191,.18), transparent 40%),
+                  radial-gradient(ellipse at 70% 80%, rgba(0,181,255,.16), transparent 40%), var(--bg);
+      backdrop-filter: blur(22px);
+    }
+    .away canvas{position:absolute;inset:0;opacity:.6}
+    .away .panel{position:relative;width:min(560px,92vw);padding:28px;border-radius:18px;backdrop-filter: blur(22px);background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow-md);text-align:center}
+    .away .mark{width:64px;height:64px;border-radius:16px;margin:0 auto 12px auto;background:#0f172a;color:#01FABF;display:grid;place-items:center;font-weight:900;box-shadow:inset 0 0 0 3px rgba(1,250,191,.35);overflow:hidden}
+    .away .mark img{width:100%;height:100%;object-fit:cover;display:none}
+    [data-theme="dark"] .away .mark{background:#01FABF;color:#001014;box-shadow:inset 0 0 0 3px rgba(0,16,20,.35)}
+    .away h1{margin:0 0 6px 0;font-size:24px}
+    .away p{margin:0 0 10px 0;color:var(--muted)}
+    .pin-wrap{display:grid;gap:10px;justify-items:center;margin-top:6px}
+    .pin-input{letter-spacing:8px;text-align:center;font-size:18px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);width:220px}
+    .keypad{display:grid;grid-template-columns:repeat(3,70px);gap:10px;justify-content:center}
+    .keypad button{height:48px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:800;cursor:pointer}
+    .shake{animation:shake .35s ease}
+    @keyframes shake{10%, 90% { transform: translateX(-2px); }20%, 80% { transform: translateX(4px); }30%, 50%, 70% { transform: translateX(-6px); }40%, 60% { transform: translateX(6px); }}
+
+    /* RESPONSIVE */
+    @media (max-width:980px){
+      .app{grid-template-columns:1fr}
+      .sidebar{position:fixed;transform:translateX(-100%);z-index:60;width:260px}
+      .sidebar.open{transform:translateX(0)}
+      .topbar .menu{display:block}
+      .stats{grid-template-columns:1fr 1fr}
+      .icon-grid{grid-template-columns:repeat(5,1fr)}
+    }
+    @media (max-width:700px){ .icon-grid{grid-template-columns:repeat(4,1fr)} }
+    .menu{display:none}
+
+    /* KEYFRAMES */
+    @keyframes fade{from{opacity:0}to{opacity:1}}
+
+    /* TOAST */
+    .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 14px;border-radius:999px;box-shadow:var(--shadow-md);z-index:120;opacity:0;pointer-events:none;transition:opacity .2s ease}
+    .toast.show{opacity:1}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="logo">
+        <div class="logo-mark" id="logoMark"><span>EW</span><img id="logoMarkImg" alt=""></div>
+        <div class="logo-title">Elite HQ</div>
+      </div>
+      <nav class="nav" id="nav">
+        <a href="#/dashboard" data-route="dashboard" class="active"><span class="ico" data-ico="home"></span>Dashboard</a>
+        <a href="#/contacts" data-route="contacts"><span class="ico" data-ico="user"></span>Contacts</a>
+        <a href="#/projects" data-route="projects"><span class="ico" data-ico="folder"></span>Projects</a>
+        <a href="#/calendar" data-route="calendar"><span class="ico" data-ico="calendar"></span>Calendar</a>
+        <a href="#/suppliers" data-route="suppliers"><span class="ico" data-ico="shield"></span>Suppliers</a>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <button class="btn menu" id="menuBtn">☰</button>
+        <div class="crumb" id="crumb">Dashboard</div>
+        <div class="page-title" id="pageTitle"></div>
+        <div class="spacer"></div>
+        <div class="top-actions">
+          <div class="top-logo" title="Brand logo"><span>EW</span><img id="topLogoImg" alt=""></div>
+          <button class="icon-btn" id="uploadLogoBtn" title="Upload brand logo">
+            <span class="ico" data-ico="upload"></span><span>Upload Logo</span>
+            <input id="logoFile" type="file" accept=".png,.jpg,.jpeg,.svg" style="display:none">
+          </button>
+          <button class="icon-btn" id="awayBtn" title="Away Mode"><span class="ico" data-ico="shield"></span><span>Privacy</span></button>
+          <div class="divider"></div>
+          <div class="switch" id="modeSwitch" role="switch" aria-checked="false" tabindex="0" title="Toggle theme">
+            <div class="knob"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="container" id="view"><!-- routed content injects here --></div>
+    </main>
+  </div>
+
+  <!-- Away Mode 2.0 -->
+  <div class="away" id="awayOverlay" aria-hidden="true">
+    <canvas id="particles"></canvas>
+    <div class="panel">
+      <div class="mark"><span>EW</span><img id="awayLogoImg" alt=""></div>
+      <h1>Elite HQ — Secured</h1>
+      <p>Enter your PIN to unlock.</p>
+      <div class="pin-wrap">
+        <input id="pinInput" class="pin-input" type="password" inputmode="numeric" autocomplete="one-time-code" placeholder="••••••" maxlength="6" />
+        <div class="keypad" id="keypad"></div>
+        <small class="muted">PIN: 6 digits • Desktop: type directly • Mobile: use keypad</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modals -->
+  <div class="modal-backdrop" id="modalBackdrop" aria-hidden="true"></div>
+  <!-- Toast -->
+  <div class="toast" id="toast">Copied</div>
+
+  <script>
+    /************ Theme ************/
+    const THEME_KEY = 'ew_theme';
+    function applyTheme(t){
+      document.documentElement.setAttribute('data-theme', t);
+      document.getElementById('modeSwitch').setAttribute('aria-checked', String(t==='dark'));
+    }
+    function initTheme(){
+      const saved = localStorage.getItem(THEME_KEY) || 'light';
+      applyTheme(saved);
+    }
+    initTheme();
+    const switchEl = document.getElementById('modeSwitch');
+    function toggleTheme(){
+      const cur = document.documentElement.getAttribute('data-theme')==='dark' ? 'dark' : 'light';
+      const next = cur==='dark' ? 'light' : 'dark';
+      localStorage.setItem(THEME_KEY, next);
+      applyTheme(next);
+    }
+    switchEl.addEventListener('click', toggleTheme);
+    switchEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); toggleTheme(); } });
+
+    /************ Simple Store (localStorage) ************/
+    const Store = {
+      get(key, fallback){
+        try { return JSON.parse(localStorage.getItem(key)) ?? fallback } catch { return fallback }
+      },
+      set(key, value){ localStorage.setItem(key, JSON.stringify(value)); }
+    };
+    const db = {
+      links: Store.get('ew_links',[
+        { id: crypto.randomUUID(), title:'Gmail', url:'https://mail.google.com', icon:'mail', color:'neutral' },
+        { id: crypto.randomUUID(), title:'Calendar', url:'https://calendar.google.com', icon:'calendar', color:'neutral' },
+      ]),
+      contacts: Store.get('ew_contacts',[]),
+      projects: Store.get('ew_projects',[]),
+      suppliers: Store.get('ew_suppliers',[]),
+      calendarEvents: Store.get('ew_calendar',[])
+    };
+    function persist(){
+      Store.set('ew_links', db.links);
+      Store.set('ew_contacts', db.contacts);
+      Store.set('ew_projects', db.projects);
+      Store.set('ew_suppliers', db.suppliers);
+      Store.set('ew_calendar', db.calendarEvents);
+    }
+
+    /************ Icons (outline, inline) ************/
+    const Icons = {
+      mail: 'M4 4h16v16H4z M4 6l8 6 8-6',
+      calendar: 'M4 5h16v14H4z M8 3v4 M16 3v4 M4 9h16',
+      user: 'M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10 M4 20a8 6 0 0 1 16 0',
+      link: 'M10 14L8 16a4 4 0 1 1-6-6l2-2 M14 10l2-2a4 4 0 0 1 6 6l-2 2 M9 12h6',
+      globe: 'M12 2a10 10 0 1 0 0 20 M2 12h20 M12 2a15 15 0 0 1 0 20 M12 2a15 15 0 0 0 0 20',
+      folder: 'M3 7h7l2 3h9v9H3z',
+      file: 'M6 2h9l5 5v15H6z M15 2v6h6',
+      phone: 'M6 2h12v20H6z M12 18.5a.5.5 0 1 0 0 1 M9 4h6v10H9z',
+      camera: 'M4 7h16v10H4z M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0-8 0 M7 7V5h4v2',
+      settings: 'M12 8a4 4 0 1 0 0 8 M4 12h4 M16 12h4 M12 4v4 M12 16v4',
+      home: 'M3 10l9-7 9 7v10H3z M9 21v-6h6v6',
+      bell: 'M6 10a6 6 0 0 1 12 0v6H6z M10 20a2 2 0 0 0 4 0',
+      star: 'M12 3l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z',
+      map: 'M9 4l6-2 6 2v16l-6-2-6 2-6-2V2z M15 10a2 2 0 1 0 0 .01',
+      credit: 'M3 6h18v12H3z M3 9h18',
+      shield: 'M12 2l8 4v6c0 5-4 8-8 10-4-2-8-5-8-10V6z',
+      clock: 'M12 3a9 9 0 1 0 0 18 M12 7v6l4 2',
+      pin: 'M12 22s-6-5.2-6-10a6 6 0 1 1 12 0c0 4.8-6 10-6 10z M12 12a2.5 2.5 0 1 0 0 .01',
+      doc: 'M6 3h9l3 3v15H6z M15 3v6h6',
+      image: 'M3 5h18v14H3z M9 11a2 2 0 1 0 0 .01 M21 17l-6-6-5 5-3-3-4 4',
+      play: 'M5 3l16 9-16 9z',
+      chat: 'M4 5h16v10H7l-3 4z',
+      download: 'M12 3v10 M7 11l5 5 5-5 M5 19h14',
+      upload: 'M12 21V11 M7 13l5-5 5 5 M5 5h14',
+      wrench: 'M21 7a7 7 0 0 1-9 9l-6 6-3-3 6-6a7 7 0 0 1 9-9z',
+      copy: 'M9 3h10v10H9z M5 7h10v10H5z'
+    };
+    const ICON_KEYS = Object.keys(Icons);
+    function renderIcon(key){
+      const d = Icons[key] || Icons['link'];
+      return `<svg class="icon" viewBox="0 0 24 24"><path d="${d.replace(/\s+/g,' ')}"/></svg>`;
+    }
+    function hydrateInlineIcons(){
+      document.querySelectorAll('[data-ico]').forEach(n=> n.innerHTML = renderIcon(n.dataset.ico));
+    }
+
+    /************ Utilities ************/
+    const $ = (sel,root=document)=>root.querySelector(sel);
+    const $$ = (sel,root=document)=>[...root.querySelectorAll(sel)];
+    function el(tag, attrs={}, children=[]){
+      const n = document.createElement(tag);
+      for(const [k,v] of Object.entries(attrs)){
+        if(k==='class') n.className=v;
+        else if(k==='html') n.innerHTML=v;
+        else if(k.startsWith('on')) n.addEventListener(k.slice(2),v);
+        else n.setAttribute(k,v);
+      }
+      children.forEach(c=> n.append(c));
+      return n;
+    }
+    function currency(n){ return new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP',maximumFractionDigits:0}).format(+n||0).replace('£','£'); }
+
+    /* tiny toast + clipboard */
+    function showToast(msg='Copied'){
+      const t = document.getElementById('toast'); if(!t) return;
+      t.textContent = msg; t.classList.add('show');
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(()=>t.classList.remove('show'), 1200);
+    }
+    async function copyText(txt){
+      try{ await navigator.clipboard.writeText(txt||''); showToast('Copied'); }
+      catch(e){ showToast('Copy failed'); }
+    }
+
+    /************ Calendar Helpers ************/
+    const calendarState = { viewDate: new Date() };
+    const MONTH_FORMAT = new Intl.DateTimeFormat('en-GB',{month:'long',year:'numeric'});
+    const DAY_FORMAT = new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',year:'numeric'});
+    function parseISODate(str){
+      if(!str) return null;
+      const [y,m,d] = str.split('-').map(Number);
+      if(!y || !m || !d) return null;
+      const date = new Date(y, m-1, d);
+      if(Number.isNaN(date.getTime())) return null;
+      return date;
+    }
+    function toStartOfDay(date){
+      if(!date) return null;
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    }
+    function isSameDay(a,b){
+      if(!a || !b) return false;
+      return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+    }
+    function eventRange(ev){
+      const start = parseISODate(ev.date);
+      const end = parseISODate(ev.endDate) || start;
+      if(!start) return null;
+      if(end && end < start){ return { start, end: start }; }
+      return { start, end: end || start };
+    }
+    function eventOccursOn(ev, day){
+      const range = eventRange(ev);
+      if(!range) return false;
+      const start = toStartOfDay(range.start);
+      const end = toStartOfDay(range.end);
+      const target = toStartOfDay(day);
+      return target >= start && target <= end;
+    }
+    function formatEventRange(ev){
+      const range = eventRange(ev);
+      if(!range) return 'Date to be announced';
+      if(isSameDay(range.start, range.end)) return DAY_FORMAT.format(range.start);
+      return `${DAY_FORMAT.format(range.start)} → ${DAY_FORMAT.format(range.end)}`;
+    }
+
+    /************ Router ************/
+    const routes = { dashboard: renderDashboard, contacts: renderContacts, projects: renderProjects, calendar: renderCalendar, suppliers: renderSuppliers };
+    function route(){
+      const hash = location.hash.replace('#/','') || 'dashboard';
+      $$('#nav a').forEach(a=>a.classList.toggle('active', a.dataset.route===hash));
+      $('#crumb').textContent = hash[0].toUpperCase()+hash.slice(1);
+      routes[hash]();
+      hydrateInlineIcons();
+    }
+    window.addEventListener('hashchange', route);
+
+    /************ Views ************/
+    function renderDashboard(){
+      const active = db.projects.filter(p=>p.status!=='Completed').length;
+      const totalVal = db.projects.reduce((a,b)=>a+(+b.budget||0),0);
+
+      $('#view').innerHTML = '';
+      const wrap = el('div',{},[
+        el('div',{class:'welcome'},[
+          el('h2',{html:'Welcome to Elite HQ'}),
+          el('p',{html:'Your interior vinyl wrapping business command center'})
+        ]),
+        el('div',{style:'height:12px'}),
+        el('div',{class:'stats'},[
+          stat('b-blue','user','Total Contacts', db.contacts.length),
+          stat('b-green','wrench','Active Projects', active),
+          stat('b-purple','folder','Total Projects', db.projects.length),
+          stat('b-yellow','credit','Project Value', currency(totalVal))
+        ]),
+        el('div',{style:'height:12px'}),
+        card('Quick Links', renderQuickLinksSection()),
+        el('div',{style:'height:12px'}),
+        card('Recent Contacts', renderRecentContacts()),
+        card('Recent Projects', renderRecentProjects()),
+      ]);
+      $('#view').append(wrap);
+    }
+    function stat(badgeClass, iconKey, label, value){
+      const badge = el('div',{class:'badge '+badgeClass, html: renderIcon(iconKey)});
+      return el('div',{class:'stat'},[
+        badge,
+        el('div',{},[ el('div',{class:'val',html:value}), el('div',{class:'muted',html:label}) ])
+      ]);
+    }
+    function card(title, content){
+      const box = el('div',{class:'card pad', style:'margin-bottom:12px'},[]);
+      box.append(el('div',{class:'section-title',html:title}));
+      box.append(content);
+      return box;
+    }
+
+    /* Quick links */
+    function renderQuickLinksSection(){
+      const box = el('div',{});
+      const grid = el('div',{class:'links-grid'});
+      db.links.forEach(link=>grid.append(quickLinkCard(link)));
+      const tools = el('div',{class:'toolbar', style:'margin-top:10px'},[
+        el('button',{class:'chip', onclick:()=>openLinkModal()},[document.createTextNode('+ Add Link')])
+      ]);
+      box.append(grid, tools);
+      return box;
+    }
+    function quickLinkCard(link){
+      const color = link.color || 'neutral';
+      const card = el('a',{href:link.url,target:'_blank',class:'ql-card','data-color':color,onclick:(e)=>{
+        if(e.target.closest('.ql-actions')){ e.preventDefault(); }
+      }},[
+        el('div',{class:'ql-actions'},[
+          el('button',{class:'chip',title:'Edit link',onclick:(e)=>{ e.stopPropagation(); e.preventDefault(); openLinkModal(link); }},[document.createTextNode('Edit')]),
+          el('button',{class:'chip',title:'Delete link',onclick:(e)=>{ e.stopPropagation(); e.preventDefault(); deleteLink(link.id); }},[document.createTextNode('Delete')])
+        ]),
+        el('div',{class:'icon-badge', html: renderIcon(link.icon || 'link')}),
+        el('div',{class:'ql-title',html:link.title}),
+        el('div',{class:'ql-ext'},[document.createTextNode('↗')])
+      ]);
+      return card;
+    }
+    function deleteLink(id){
+      if(!confirm('Remove this quick link?')) return;
+      db.links = db.links.filter(l=>l.id!==id); persist(); route();
+    }
+
+    /* Recent lists */
+    function renderRecentContacts(){
+      if(!db.contacts.length) return el('div',{class:'card pad'},[el('div',{class:'empty',html:'No contacts yet'})]);
+      const ul = el('ul',{style:'list-style:none;margin:0;padding:0;display:grid;gap:8px'});
+      db.contacts.slice(-5).reverse().forEach(c=>{
+        ul.append(el('li',{class:'card pad'},[el('div',{html:`<strong>${c.name}</strong> • <span class="muted">${c.type||'Other'}</span><br><span class="muted">${c.company||''}</span>`})]));
+      });
+      return ul;
+    }
+    function renderRecentProjects(){
+      if(!db.projects.length) return el('div',{class:'card pad'},[el('div',{class:'empty',html:'No projects yet'})]);
+      const ul = el('ul',{style:'list-style:none;margin:0;padding:0;display:grid;gap:8px'});
+      db.projects.slice(-5).reverse().forEach(p=>{
+        ul.append(el('li',{class:'card pad'},[el('div',{html:`<strong>${p.name}</strong> • <span class="muted">${p.status||'Planning'}</span> • ${currency(p.budget||0)}`})]));
+      });
+      return ul;
+    }
+
+    /* CONTACTS — card layout + alpha sort + details modal */
+    function renderContacts(){
+      const wrap = el('div',{});
+
+      const privateCount = db.contacts.filter(c=>c.type==='Private Client').length;
+      const commercialCount = db.contacts.filter(c=>c.type==='Commercial Client').length;
+
+      wrap.append(el('div',{class:'stats'},[
+        stat('b-blue','phone','Total Contacts', db.contacts.length),
+        stat('b-green','user','Private Clients', privateCount),
+        stat('b-purple','user','Commercial Clients', commercialCount),
+        stat('b-yellow','shield','Suppliers', db.contacts.filter(c=>c.type==='Supplier').length),
+      ]));
+      wrap.append(el('div',{style:'height:12px'}));
+
+      const cardWrap = el('div',{class:'card pad'});
+      cardWrap.append(el('div',{class:'section-title',html:'Contacts'}));
+
+      const toolbar = el('div',{class:'row',style:'justify-content:space-between;align-items:center;margin-bottom:8px'},[]);
+      const left = el('div',{class:'search'},[ el('input',{class:'input',placeholder:'Search contacts...',id:'contactSearch'}) ]);
+      const right = el('div',{class:'toolbar'},[
+        el('select',{id:'contactFilter',class:'input',style:'width:auto'},[
+          el('option',{value:'all',html:'All Types'}),
+          el('option',{value:'Private Client',html:'Private Client'}),
+          el('option',{value:'Commercial Client',html:'Commercial Client'}),
+          el('option',{value:'Supplier',html:'Supplier'}),
+          el('option',{value:'Other',html:'Other'}),
+        ]),
+        el('button',{class:'chip',onclick:()=>openContactModal()},[document.createTextNode('+ Add Contact')])
+      ]);
+      toolbar.append(left,right);
+      cardWrap.append(toolbar);
+
+      const grid = el('div',{class:'contact-grid',id:'contactsGrid'});
+      cardWrap.append(grid);
+      wrap.append(cardWrap);
+      $('#view').innerHTML=''; $('#view').append(wrap);
+
+      function cardFor(c){
+        const left = el('div',{},[
+          el('div',{class:'contact-name',html:c.name||'(no name)'}),
+          el('div',{class:'contact-meta',html:[
+            c.type||'Other',
+            c.company?` • ${c.company}`:'',
+            (c.phone||c.email)?`<br>${c.phone||''}${c.email?(' • '+c.email):''}`:''
+          ].join('')})
+        ]);
+
+        const actions = el('div',{class:'contact-actions'},[
+          c.phone ? el('button',{class:'btn sm',onclick:(e)=>{e.stopPropagation();copyText(c.phone)}},[el('span',{html:renderIcon('copy')}),document.createTextNode('Copy Phone')]) : null,
+          c.email ? el('button',{class:'btn sm',onclick:(e)=>{e.stopPropagation();copyText(c.email)}},[el('span',{html:renderIcon('copy')}),document.createTextNode('Copy Email')]) : null,
+          el('button',{class:'btn sm',onclick:(e)=>{e.stopPropagation();openContactModal(c)}},[document.createTextNode('Edit')]),
+          el('button',{class:'btn sm danger',onclick:(e)=>{e.stopPropagation(); if(confirm('Delete contact?')){ db.contacts = db.contacts.filter(x=>x.id!==c.id); persist(); refresh(); }}},[document.createTextNode('Delete')]),
+        ].filter(Boolean));
+
+        const card = el('div',{class:'contact-card',onclick:()=>viewContactModal(c)},[left, actions]);
+        return card;
+      }
+
+      function refresh(){
+        const q = $('#contactSearch').value?.toLowerCase() || '';
+        const f = $('#contactFilter').value;
+        grid.innerHTML='';
+
+        let items = db.contacts.filter(c => (
+          (c.name||'').toLowerCase().includes(q) ||
+          (c.company||'').toLowerCase().includes(q) ||
+          (c.email||'').toLowerCase().includes(q) ||
+          (c.phone||'').toLowerCase().includes(q)
+        ));
+        if(f!=='all') items = items.filter(c=> (c.type||'Other')===f);
+
+        items.sort((a,b)=> (a.name||'').localeCompare(b.name||'', undefined, {sensitivity:'base'}));
+
+        if(!items.length){
+          grid.append(el('div',{class:'empty',html:'No contacts yet. Add your first contact to get started.'}));
+          return;
+        }
+        items.forEach(c=> grid.append(cardFor(c)));
+      }
+      $('#contactSearch').addEventListener('input',refresh);
+      $('#contactFilter').addEventListener('change',refresh);
+      refresh();
+    }
+
+    function renderProjects(){
+      const wrap = el('div',{});
+      const inProgress = db.projects.filter(p=>p.status!=='Completed').length;
+      const totalVal = db.projects.reduce((a,b)=>a+(+b.budget||0),0);
+      wrap.append(el('div',{class:'stats'},[
+        stat('b-blue','doc','Total Projects', db.projects.length),
+        stat('b-green','wrench','In Progress', inProgress),
+        stat('b-purple','folder','Completed', db.projects.filter(p=>p.status==='Completed').length),
+        stat('b-yellow','credit','Total Value', currency(totalVal)),
+      ]));
+      wrap.append(el('div',{style:'height:12px'}));
+
+      const cardWrap = el('div',{class:'card pad'});
+      cardWrap.append(el('div',{class:'section-title',html:'Projects'}));
+
+      const toolbar = el('div',{class:'row',style:'justify-content:space-between;align-items:center;margin-bottom:8px'},[]);
+      const left = el('div',{class:'search'},[ el('input',{class:'input',placeholder:'Search projects...',id:'projectSearch'}) ]);
+      const right = el('div',{class:'toolbar'},[ el('select',{id:'projectFilter',class:'input',style:'width:auto'},[
+          el('option',{value:'all',html:'All Status'}),
+          el('option',{value:'Planning',html:'Planning'}),
+          el('option',{value:'In Progress',html:'In Progress'}),
+          el('option',{value:'Completed',html:'Completed'}),
+        ]),
+        el('button',{class:'chip',onclick:()=>openProjectModal()},[document.createTextNode('+ Add Project')])
+      ]);
+      toolbar.append(left,right);
+      cardWrap.append(toolbar);
+
+      const table = el('table',{class:'table',id:'projectsTable'},[
+        el('thead',{},[el('tr',{},[ 'Project Name','Client','Status','Budget','Dates','Actions'].map(h=>el('th',{html:h}))) ]),
+        el('tbody',{})
+      ]);
+      cardWrap.append(table);
+      wrap.append(cardWrap);
+      $('#view').innerHTML=''; $('#view').append(wrap);
+
+      function refresh(){
+        const q = $('#projectSearch').value?.toLowerCase() || '';
+        const f = $('#projectFilter').value;
+        const body = $('#projectsTable tbody');
+        body.innerHTML='';
+        let items = db.projects.filter(p => ((p.name||'').toLowerCase().includes(q) || (p.client||'').toLowerCase().includes(q)));
+        if(f!=='all') items = items.filter(p=> (p.status||'Planning')===f);
+        if(!items.length){ body.append(el('tr',{},[el('td',{colspan:6,class:'empty',html:'No projects yet. Add your first project to get started.'})])); return; }
+        items.forEach(p=>{
+          body.append(el('tr',{},[
+            el('td',{html:p.name||''}),
+            el('td',{html:p.client||''}),
+            el('td',{html:p.status||'Planning'}),
+            el('td',{html:currency(p.budget||0)}),
+            el('td',{html:`${p.start||''} – ${p.end||''}`}),
+            el('td',{},[ el('div',{class:'row'},[
+              el('button',{class:'btn',onclick:()=>openProjectModal(p)},[document.createTextNode('Edit')]),
+               el('button',{class:'btn danger',onclick:()=>{ if(confirm('Delete project?')){ removeProjectCalendar(p.id); db.projects = db.projects.filter(x=>x.id!==p.id); persist(); refresh(); }}},[document.createTextNode('Delete')])
+            ]) ])
+          ]));
+        });
+      }
+      $('#projectSearch').addEventListener('input',refresh);
+      $('#projectFilter').addEventListener('change',refresh);
+      refresh();
+    }
+
+    function renderCalendar(){
+      const view = $('#view');
+      if(!view) return;
+      view.innerHTML = '';
+
+      const totalEvents = db.calendarEvents.length;
+      const projectEvents = db.calendarEvents.filter(e=>e.source==='project').length;
+      const personalEvents = totalEvents - projectEvents;
+      const activeProjects = db.projects.filter(p=>p.status!=='Completed').length;
+
+      const wrap = el('div',{class:'calendar-page'});
+      wrap.append(el('div',{class:'stats'},[
+        stat('b-blue','calendar','Scheduled Items', totalEvents),
+        stat('b-green','wrench','Project Entries', projectEvents),
+        stat('b-purple','star','Personal Notes', Math.max(personalEvents,0)),
+        stat('b-yellow','clock','Active Projects', activeProjects)
+      ]));
+      wrap.append(el('div',{style:'height:12px'}));
+
+      const layout = el('div',{class:'calendar-layout'});
+
+      const calendarCard = el('div',{class:'card pad calendar-card'});
+      const header = el('div',{class:'calendar-header'},[
+        el('h2',{html:MONTH_FORMAT.format(calendarState.viewDate)}),
+        el('div',{class:'calendar-nav'},[
+          el('button',{class:'btn',onclick:()=>{ shiftMonth(-1); }},[document.createTextNode('◀')]),
+          el('button',{class:'btn',onclick:()=>{ calendarState.viewDate = new Date(); renderCalendar(); }},[document.createTextNode('Today')]),
+          el('button',{class:'btn',onclick:()=>{ shiftMonth(1); }},[document.createTextNode('▶')]),
+          el('button',{class:'chip',onclick:()=>openEventModal()},[document.createTextNode('+ Add Event')])
+        ])
+      ]);
+      calendarCard.append(header);
+
+      const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+      const dayRow = el('div',{class:'calendar-grid'}, dayNames.map(d=>el('div',{class:'calendar-day',html:d})));
+      calendarCard.append(dayRow);
+
+      const grid = el('div',{class:'calendar-grid'});
+      const base = new Date(calendarState.viewDate.getFullYear(), calendarState.viewDate.getMonth(), 1);
+      const startOffset = (base.getDay()+6)%7; // Monday-first
+      base.setDate(base.getDate()-startOffset);
+
+      const today = new Date();
+      for(let i=0;i<42;i++){
+        const current = new Date(base.getFullYear(), base.getMonth(), base.getDate()+i);
+        const isCurrentMonth = current.getMonth()===calendarState.viewDate.getMonth();
+        const cell = el('div',{class:'calendar-cell'+(isSameDay(current,today)?' today':'')});
+        const dateLabel = el('div',{class:'calendar-date'+(isCurrentMonth?'':' muted'),html:String(current.getDate())});
+        cell.append(dateLabel);
+
+        const todaysEvents = db.calendarEvents.filter(ev=>eventOccursOn(ev, current));
+        if(todaysEvents.length){
+          const list = el('div',{class:'calendar-events'});
+          todaysEvents.slice(0,3).forEach(ev=>{
+            const badge = el('div',{
+              class:'calendar-event',
+              'data-type': ev.source==='project' ? 'project' : 'manual',
+              onclick:()=>handleEventClick(ev)
+            },[document.createTextNode(ev.title || 'Untitled Event')]);
+            list.append(badge);
+          });
+          if(todaysEvents.length>3){
+            list.append(el('div',{class:'muted',style:'font-size:11px'},[document.createTextNode(`+${todaysEvents.length-3} more`)]));
+          }
+          cell.append(list);
+        }
+        grid.append(cell);
+      }
+      calendarCard.append(grid);
+
+      const sidebar = el('div',{class:'card pad calendar-sidebar'});
+      sidebar.append(el('div',{class:'section-title',html:'Upcoming Schedule'}));
+      const upcoming = el('div',{class:'event-list'});
+      const sorted = db.calendarEvents
+        .map(ev=>({ ev, range: eventRange(ev) }))
+        .filter(({range})=>!!range)
+        .sort((a,b)=>a.range.start - b.range.start)
+        .map(({ev})=>ev);
+      if(!sorted.length){
+        upcoming.append(el('div',{class:'empty',html:'No events scheduled yet. Add an event or create a project to populate the calendar.'}));
+      } else {
+        sorted.forEach(ev=>{
+          const card = el('div',{class:'event-card'});
+          card.append(el('h3',{html:ev.title || 'Untitled Event'}));
+          const metaBits = [formatEventRange(ev)];
+          if(ev.client) metaBits.push(ev.client);
+          if(ev.source==='project') metaBits.push('Project');
+          card.append(el('div',{class:'event-meta',html:metaBits.join(' • ')}));
+          if(ev.notes){
+            card.append(el('div',{class:'muted',html:ev.notes}));
+          }
+          const actions = el('div',{class:'event-actions'});
+          if(ev.source==='project'){
+            actions.append(el('button',{class:'btn sm',onclick:()=>{
+              const project = db.projects.find(p=>p.id===ev.sourceId);
+              if(project){ openProjectModal(project); }
+              else{ alert('Project not found.'); }
+            }},[document.createTextNode('View Project')]));
+          } else {
+            actions.append(el('button',{class:'btn sm',onclick:()=>openEventModal(ev)},[document.createTextNode('Edit')]));
+            actions.append(el('button',{class:'btn sm danger',onclick:()=>{
+              if(confirm('Delete this event?')){
+                db.calendarEvents = db.calendarEvents.filter(x=>x.id!==ev.id);
+                persist();
+                renderCalendar();
+              }
+            }},[document.createTextNode('Delete')]));
+          }
+          if(actions.children.length){ card.append(actions); }
+          upcoming.append(card);
+        });
+      }
+      sidebar.append(upcoming);
+
+      layout.append(calendarCard, sidebar);
+      wrap.append(layout);
+      view.append(wrap);
+
+      function shiftMonth(delta){
+        const cur = calendarState.viewDate;
+        calendarState.viewDate = new Date(cur.getFullYear(), cur.getMonth()+delta, 1);
+        renderCalendar();
+      }
+
+      function handleEventClick(ev){
+        if(ev.source==='project'){
+          const project = db.projects.find(p=>p.id===ev.sourceId);
+          if(project){ openProjectModal(project); }
+          else{ alert('Project not found.'); }
+        } else {
+          openEventModal(ev);
+        }
+      }
+    }
+
+    /* SUPPLIERS — UPDATED */
+    function renderSuppliers(){
+      const wrap = el('div',{});
+      wrap.append(el('div',{class:'card pad'},[
+        el('div',{class:'section-title',html:'Suppliers'}),
+        el('div',{class:'toolbar',style:'margin-bottom:10px'},[
+          el('button',{class:'chip',onclick:()=>openSupplierModal()},[document.createTextNode('+ Add Supplier')])
+        ]),
+        el('div',{class:'supplier-list',id:'supplierList'})
+      ]));
+      $('#view').innerHTML=''; $('#view').append(wrap);
+      refreshSuppliers();
+    }
+    function supplierTile(s){
+      const logo = el('div',{class:'supplier-logo'},[]);
+      if(s.logo){ logo.append(el('img',{src:s.logo, alt:(s.name||'')})); }
+      else{ logo.innerHTML = renderIcon('image'); }
+      const meta = el('div',{class:'supplier-meta'},[
+        el('div',{class:'supplier-name',html:s.name||'Unnamed Supplier'}),
+        el('div',{class:'supplier-url',html:s.url||''})
+      ]);
+      const edit = el('button',{class:'btn',onclick:(e)=>{e.stopPropagation();openSupplierModal(s);}},[document.createTextNode('Edit')]);
+      const del  = el('button',{class:'btn danger',onclick:(e)=>{e.stopPropagation(); if(confirm('Delete supplier?')){ db.suppliers = db.suppliers.filter(x=>x.id!==s.id); persist(); refreshSuppliers(); }}},[document.createTextNode('Delete')]);
+
+      const tile = el('div',{class:'supplier-tile', onclick:()=>{ if(s.url){ const href = s.url.startsWith('http')? s.url : 'https://' + s.url; window.open(href,'_blank'); } }},[
+        logo, meta, el('div',{class:'supplier-actions'},[edit, del])
+      ]);
+      return tile;
+    }
+    function refreshSuppliers(){
+      const list = $('#supplierList'); list.innerHTML='';
+      if(!db.suppliers.length){
+        list.append(el('div',{class:'empty',html:'No suppliers yet. Add one to get started.'}));
+        return;
+      }
+      db.suppliers.forEach(s=> list.append(supplierTile(s)));
+    }
+
+    function formField(label, control, hint=''){
+      const w = el('div',{},[ el('div',{style:'font-weight:700;margin:6px 2px'},[document.createTextNode(label)]), control ]);
+      if(hint) w.append(el('div',{class:'hint',html:hint}));
+      return w;
+    }
+
+    function syncProjectCalendar(project){
+      if(!project) return;
+      const baseDate = project.start || project.end;
+      if(!baseDate){
+        removeProjectCalendar(project.id);
+        return;
+      }
+      const payload = {
+        title: project.name || 'Project',
+        date: project.start || project.end,
+        endDate: project.end || project.start || project.start,
+        client: project.client || '',
+        notes: project.notes || '',
+        source: 'project',
+        sourceId: project.id
+      };
+      const existing = db.calendarEvents.find(ev=>ev.source==='project' && ev.sourceId===project.id);
+      if(existing){
+        Object.assign(existing, payload);
+      } else {
+        db.calendarEvents.push({ id: crypto.randomUUID(), ...payload });
+      }
+    }
+
+    function removeProjectCalendar(projectId){
+      db.calendarEvents = db.calendarEvents.filter(ev=>!(ev.source==='project' && ev.sourceId===projectId));
+    }
+
+    (function initialProjectCalendarSync(){
+      const before = JSON.stringify(db.calendarEvents);
+      db.projects.forEach(p=>syncProjectCalendar(p));
+      if(before !== JSON.stringify(db.calendarEvents)){
+        persist();
+      }
+    })();
+
+    /************ Modals ************/
+    function openModal(title, bodyNode, onSubmit, submitText='Save', opts={}){
+      const bd = $('#modalBackdrop'); bd.innerHTML='';
+      const modal = el('div',{class:'modal'+(opts.className?(' '+opts.className):''), role:'dialog','aria-modal':'true'},[]);
+      function closeModal(){ bd.style.display='none'; }
+      modal.append(
+        el('header',{},[
+          el('h3',{html:title}),
+          el('div',{class:'close-x',onclick:closeModal, title:'Close'},[document.createTextNode('✕')])
+        ]),
+        el('div',{class:'body'},[bodyNode]),
+        el('div',{class:'footer'},[
+          el('button',{class:'btn',onclick:closeModal},[document.createTextNode('Cancel')]),
+          el('button',{class:'btn primary',onclick:()=>{ if(onSubmit()) closeModal(); }},[document.createTextNode(submitText)])
+        ])
+      );
+      bd.append(modal); bd.style.display='flex';
+      return { close: closeModal };
+    }
+
+    /* Icon picker (used by Links) */
+    function iconPicker(selectedKey='link'){
+      const wrap = el('div',{});
+      wrap.append(el('div',{class:'muted', html:'Choose an icon'}));
+      const grid = el('div',{class:'icon-grid'});
+      ICON_KEYS.forEach(k=>{
+        const opt = el('button',{type:'button', class:'icon-option'+(k===selectedKey?' selected':''), onclick:()=>{
+          $$('.icon-option', grid).forEach(x=>x.classList.remove('selected'));
+          opt.classList.add('selected');
+          grid.dataset.selected = k;
+        }},[]);
+        opt.innerHTML = renderIcon(k);
+        grid.append(opt);
+      });
+      grid.dataset.selected = selectedKey;
+      wrap.append(grid);
+      return { node: wrap, get: ()=>grid.dataset.selected };
+    }
+
+    /************ Add/Edit Modals (Links, Contacts, Projects) ************/
+    function openLinkModal(link){
+      const title = link ? 'Edit Quick Link' : 'Add Quick Link';
+      const titleIn = el('input',{class:'input',placeholder:'Title',value:link?.title||''});
+      const urlIn = el('input',{class:'input',placeholder:'https://example.com',value:link?.url||''});
+      const colorSel = el('select',{class:'input'},[
+        el('option',{value:'neutral',html:'Neutral'}),
+        el('option',{value:'blue',html:'Blue'}),
+        el('option',{value:'red',html:'Red'}),
+        el('option',{value:'green',html:'Green'}),
+        el('option',{value:'yellow',html:'Yellow'}),
+        el('option',{value:'purple',html:'Purple'}),
+      ]); colorSel.value = link?.color||'neutral';
+
+      const picker = iconPicker(link?.icon||'link');
+
+      const layout = el('div',{},[
+        formField('Title', titleIn),
+        formField('URL', urlIn),
+        formField('Card Accent Colour', colorSel),
+        formField('Icon', picker.node)
+      ]);
+
+      openModal(title, layout, ()=>{
+        const payload = { title:titleIn.value.trim(), url:urlIn.value.trim(), icon:picker.get(), color:colorSel.value };
+        if(!payload.title || !payload.url){ alert('Please provide a title and URL.'); return false; }
+        if(link){ Object.assign(link, payload); } else { db.links.push({ id: crypto.randomUUID(), ...payload }); }
+        persist(); route(); return true;
+      }, link?'Save':'Add Link');
+    }
+
+    function openContactModal(contact){
+      const title = contact ? 'Edit Contact' : 'Add New Contact';
+      const nameIn = el('input',{class:'input',placeholder:'Enter contact name', value: contact?.name||''});
+      const companyIn = el('input',{class:'input',placeholder:'Enter company name', value: contact?.company||''});
+      const typeSel = el('select',{class:'input'},[
+        el('option',{value:'Private Client',html:'Private Client'}),
+        el('option',{value:'Commercial Client',html:'Commercial Client'}),
+        el('option',{value:'Supplier',html:'Supplier'}),
+        el('option',{value:'Other',html:'Other'}),
+      ]); typeSel.value = contact?.type || 'Private Client';
+      const phoneIn = el('input',{class:'input',placeholder:'Enter phone number', value: contact?.phone||''});
+      const emailIn = el('input',{class:'input',placeholder:'Enter email address', value: contact?.email||''});
+
+      const body = el('div',{},[
+        formField('Name *', nameIn),
+        formField('Company', companyIn),
+        formField('Type', typeSel),
+        formField('Phone', phoneIn),
+        formField('Email', emailIn),
+      ]);
+      openModal(title, body, ()=>{
+        if(!nameIn.value.trim()){ alert('Name is required.'); return false; }
+        const payload = {
+          name: nameIn.value.trim(),
+          company: companyIn.value.trim(),
+          type: typeSel.value,
+          phone: phoneIn.value.trim(),
+          email: emailIn.value.trim()
+        };
+        if(contact){ Object.assign(contact, payload); } else { db.contacts.push({ id: crypto.randomUUID(), ...payload }); }
+        persist(); renderContacts(); return true;
+      }, contact?'Save':'Add Contact');
+    }
+
+    /* Full details modal for a contact (click a card) — wide, two-column, scrollable */
+    function viewContactModal(contact){
+      contact.address = contact.address || '';
+      contact.jobRefs = contact.jobRefs || '';
+      contact.notes   = contact.notes   || '';
+
+      const nameIn    = el('input',{class:'input',value:contact.name||'',placeholder:'Name'});
+      const companyIn = el('input',{class:'input',value:contact.company||'',placeholder:'Company'});
+      const typeSel   = el('select',{class:'input'},[
+        el('option',{value:'Private Client',html:'Private Client'}),
+        el('option',{value:'Commercial Client',html:'Commercial Client'}),
+        el('option',{value:'Supplier',html:'Supplier'}),
+        el('option',{value:'Other',html:'Other'}),
+      ]); typeSel.value = contact.type||'Private Client';
+      const phoneIn   = el('input',{class:'input',value:contact.phone||'',placeholder:'Phone'});
+      const emailIn   = el('input',{class:'input',value:contact.email||'',placeholder:'Email'});
+      const addressIn = el('textarea',{class:'input',rows:'4',placeholder:'Address', html:contact.address});
+      const refsIn    = el('textarea',{class:'input',rows:'3',placeholder:'Recent job ref(s) — comma or line separated', html:contact.jobRefs});
+      const notesIn   = el('textarea',{class:'input',rows:'5',placeholder:'Notes', html:contact.notes});
+
+      const quick = el('div',{class:'row',style:'justify-content:flex-end'},[
+        contact.phone ? el('button',{class:'btn sm',onclick:()=>copyText(contact.phone)},[el('span',{html:renderIcon('copy')}),document.createTextNode('Copy Phone')]) : null,
+        contact.email ? el('button',{class:'btn sm',onclick:()=>copyText(contact.email)},[el('span',{html:renderIcon('copy')}),document.createTextNode('Copy Email')]) : null,
+      ].filter(Boolean));
+
+      const leftCol = el('div',{},[
+        formField('Name', nameIn),
+        formField('Company', companyIn),
+        formField('Type', typeSel),
+        formField('Phone', phoneIn),
+        formField('Email', emailIn),
+      ]);
+      const rightCol = el('div',{},[
+        formField('Address', addressIn),
+        formField('Recent Job Ref(s)', refsIn, 'E.g. WRAP-1023, WRAP-1049'),
+        formField('Notes', notesIn)
+      ]);
+
+      const body = el('div',{},[
+        quick,
+        el('div',{class:'grid-2'},[leftCol, rightCol])
+      ]);
+
+      openModal('Contact Details', body, ()=>{
+        Object.assign(contact, {
+          name: nameIn.value.trim(),
+          company: companyIn.value.trim(),
+          type: typeSel.value,
+          phone: phoneIn.value.trim(),
+          email: emailIn.value.trim(),
+          address: addressIn.value.trim(),
+          jobRefs: refsIn.value.trim(),
+          notes: notesIn.value.trim(),
+        });
+        persist();
+        renderContacts();
+        return true;
+      }, 'Save Changes', { className:'wide' });
+    }
+
+    function openProjectModal(project){
+      const title = project ? 'Edit Project' : 'Add New Project';
+      const nameIn = el('input',{class:'input',placeholder:'Enter project name', value: project?.name||''});
+      const clientIn = el('input',{class:'input',placeholder:'Client', value: project?.client||''});
+      const statusSel = el('select',{class:'input'},[
+        el('option',{value:'Planning',html:'Planning'}),
+        el('option',{value:'In Progress',html:'In Progress'}),
+        el('option',{value:'Completed',html:'Completed'}),
+      ]); statusSel.value = project?.status||'Planning';
+      const startIn = el('input',{class:'input',type:'date', value: project?.start||''});
+      const endIn = el('input',{class:'input',type:'date', value: project?.end||''});
+      const budgetIn = el('input',{class:'input',type:'number',placeholder:'0', value: project?.budget||0});
+
+      // Extra fields: Vinyl + Notes
+      const vinylIn  = el('input',{class:'input',placeholder:'e.g., 3M 2080 Satin Black', value: project?.vinyl||''});
+      const notesIn  = el('textarea',{class:'input',placeholder:'Any extra info…', rows:'4', html: project?.notes||''});
+
+      const body = el('div',{},[
+        formField('Project Name *', nameIn),
+        formField('Client', clientIn),
+        formField('Status', statusSel),
+        el('div',{class:'row',style:'gap:12px'},[formField('Start Date', startIn), formField('End Date', endIn)]),
+        formField('Budget (£)', budgetIn),
+        formField('Vinyl', vinylIn, 'Material/series/finish'),
+        formField('Notes', notesIn, 'Optional')
+      ]);
+      openModal(title, body, ()=>{
+        if(!nameIn.value.trim()){ alert('Project Name is required.'); return false; }
+        const payload = {
+          name:nameIn.value.trim(),
+          client:clientIn.value.trim(),
+          status:statusSel.value,
+          start:startIn.value,
+          end:endIn.value,
+          budget:+budgetIn.value||0,
+          vinyl:vinylIn.value.trim(),
+          notes:notesIn.value.trim()
+        };
+        if(project){
+          Object.assign(project, payload);
+          syncProjectCalendar(project);
+        } else {
+          const fresh = { id: crypto.randomUUID(), ...payload };
+          db.projects.push(fresh);
+          syncProjectCalendar(fresh);
+        }
+        persist(); renderProjects(); return true;
+      }, project?'Save':'Add Project');
+    }
+
+    function openEventModal(event){
+      if(event?.source==='project'){
+        const project = db.projects.find(p=>p.id===event.sourceId);
+        if(project){ openProjectModal(project); }
+        else{ alert('Project not found.'); }
+        return;
+      }
+
+      const title = event ? 'Edit Calendar Event' : 'Add Calendar Event';
+      const nameIn = el('input',{class:'input',placeholder:'Event title',value:event?.title||''});
+      const startIn = el('input',{class:'input',type:'date',value:event?.date||''});
+      const endIn = el('input',{class:'input',type:'date',value:event?.endDate||''});
+      const tagIn = el('input',{class:'input',placeholder:'Tag or related client',value:event?.client||''});
+      const notesIn = el('textarea',{class:'input',rows:'4',placeholder:'Notes or agenda',html:event?.notes||''});
+
+      const body = el('div',{},[
+        formField('Title *', nameIn),
+        el('div',{class:'row',style:'gap:12px'},[
+          formField('Start Date *', startIn),
+          formField('End Date', endIn)
+        ]),
+        formField('Tag / Context', tagIn, 'Optional label shown in the upcoming list'),
+        formField('Notes', notesIn)
+      ]);
+
+      openModal(title, body, ()=>{
+        if(!nameIn.value.trim()){ alert('Event title is required.'); return false; }
+        if(!startIn.value){ alert('Start date is required.'); return false; }
+        if(endIn.value && endIn.value < startIn.value){ alert('End date cannot be before start date.'); return false; }
+        const payload = {
+          title: nameIn.value.trim(),
+          date: startIn.value,
+          endDate: endIn.value || startIn.value,
+          client: tagIn.value.trim(),
+          notes: notesIn.value.trim(),
+          source: 'manual'
+        };
+        if(event){
+          Object.assign(event, payload);
+        } else {
+          db.calendarEvents.push({ id: crypto.randomUUID(), ...payload });
+        }
+        persist(); renderCalendar(); return true;
+      }, event?'Save Event':'Add Event');
+    }
+
+    /************ Supplier modal (with logo upload) ************/
+    function openSupplierModal(supplier){
+      const title = supplier ? 'Edit Supplier' : 'Add Supplier';
+      const nameIn = el('input',{class:'input',placeholder:'Supplier name', value: supplier?.name||''});
+      const urlIn = el('input',{class:'input',placeholder:'https://supplier.example.com', value: supplier?.url||''});
+      const logoPrev = el('div',{class:'supplier-logo'},[]);
+      const img = el('img',{alt:'logo preview'});
+      if(supplier?.logo){ img.src = supplier.logo; logoPrev.append(img); } else { logoPrev.innerHTML = renderIcon('image'); }
+      const fileIn = el('input',{type:'file',accept:'.png,.jpg,.jpeg,.svg',style:'display:none'});
+      const pickBtn = el('button',{class:'btn',onclick:()=>fileIn.click()},[document.createTextNode('Upload Logo')]);
+      fileIn.addEventListener('change', ()=>{
+        const f = fileIn.files?.[0]; if(!f) return;
+        const reader = new FileReader();
+        reader.onload = ()=>{ img.src = reader.result; logoPrev.innerHTML=''; logoPrev.append(img); };
+        reader.readAsDataURL(f);
+      });
+      const layout = el('div',{},[
+        formField('Name', nameIn),
+        formField('URL', urlIn),
+        formField('Logo', el('div',{},[logoPrev, el('div',{style:'height:8px'}), pickBtn]), 'PNG/JPG/SVG')
+      ]);
+      openModal(title, layout, ()=>{
+        const payload = { name: nameIn.value.trim(), url: urlIn.value.trim(), logo: img.src||'' };
+        if(!payload.name || !payload.url){ alert('Please provide a name and URL.'); return false; }
+        if(supplier){ Object.assign(supplier, payload); } else { db.suppliers.push({ id: crypto.randomUUID(), ...payload }); }
+        persist(); refreshSuppliers(); return true;
+      }, supplier?'Save':'Add Supplier');
+    }
+
+    /************ Brand Logo Upload (top-right) ************/
+    const LOGO_KEY = 'ew_logo_dataurl';
+    const logoFile = $('#logoFile');
+    const uploadBtn = $('#uploadLogoBtn');
+    uploadBtn.addEventListener('click', ()=> logoFile.click());
+    logoFile.addEventListener('change', ()=>{
+      const f = logoFile.files?.[0]; if(!f) return;
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        const dataUrl = reader.result;
+        localStorage.setItem(LOGO_KEY, dataUrl);
+        applyLogos();
+      };
+      reader.readAsDataURL(f);
+    });
+    function applyLogos(){
+      const dataUrl = localStorage.getItem(LOGO_KEY);
+      const mark = $('#logoMark');
+      const markImg = $('#logoMarkImg');
+      const topImg = $('#topLogoImg');
+      const awayImg = $('#awayLogoImg');
+      if(dataUrl){
+        mark.querySelector('span')?.style && (mark.querySelector('span').style.display='none');
+        topImg.previousElementSibling && (topImg.previousElementSibling.style.display='none');
+        awayImg.previousElementSibling && (awayImg.previousElementSibling.style.display='none');
+        markImg.src=dataUrl; topImg.src=dataUrl; awayImg.src=dataUrl;
+        markImg.style.display='block'; topImg.style.display='block'; awayImg.style.display='block';
+      }else{
+        mark.querySelector('span')?.style && (mark.querySelector('span').style.display='grid');
+        const topSpan = document.querySelector('.top-logo span'); if(topSpan) topSpan.style.display='grid';
+        const awaySpan = document.querySelector('.away .mark span'); if(awaySpan) awaySpan.style.display='grid';
+        markImg.style.display='none'; topImg.style.display='none'; awayImg.style.display='none';
+      }
+    }
+    applyLogos();
+
+    /************ Away Mode 2.0 ************/
+    const PIN = '990704';
+    const away = document.getElementById('awayOverlay');
+    const pinInput = document.getElementById('pinInput');
+    const keypad = document.getElementById('keypad');
+
+    (function makeKeypad(){
+      const keys = ['1','2','3','4','5','6','7','8','9','CLR','0','←'];
+      keys.forEach(k=>{
+        const b = document.createElement('button');
+        b.textContent = k;
+        b.addEventListener('click', ()=>{
+          if(k==='CLR'){ pinInput.value=''; return; }
+          if(k==='←'){ pinInput.value = pinInput.value.slice(0,-1); return; }
+          if(pinInput.value.length<6){ pinInput.value += k; tryUnlock(); }
+        });
+        keypad.appendChild(b);
+      });
+    })();
+
+    document.getElementById('awayBtn').addEventListener('click', ()=>{
+      away.style.display='flex';
+      pinInput.value='';
+      pinInput.focus();
+    });
+
+    function tryUnlock(){
+      if(pinInput.value.length===6){
+        if(pinInput.value===PIN){
+          away.style.display='none';
+          pinInput.value='';
+        } else {
+          const p = pinInput;
+          p.classList.remove('shake'); void p.offsetWidth; p.classList.add('shake');
+          p.value='';
+        }
+      }
+    }
+    pinInput.addEventListener('input', tryUnlock);
+
+    // Particle shimmer
+    (function particles(){
+      const c = document.getElementById('particles');
+      const ctx = c.getContext('2d');
+      function resize(){ c.width = innerWidth; c.height = innerHeight; }
+      window.addEventListener('resize', resize); resize();
+      const dots = Array.from({length: 70}, ()=>({
+        x: Math.random()*c.width,
+        y: Math.random()*c.height,
+        r: Math.random()*2+0.5,
+        a: Math.random()*Math.PI*2,
+        s: Math.random()*0.6+0.2
+      }));
+      function step(){
+        ctx.clearRect(0,0,c.width,c.height);
+        for(const d of dots){
+          d.x += Math.cos(d.a)*d.s; d.y += Math.sin(d.a)*d.s;
+          if(d.x<0||d.x>c.width||d.y<0||d.y>c.height){ d.x=Math.random()*c.width; d.y=Math.random()*c.height; }
+          const grad = ctx.createRadialGradient(d.x,d.y,0,d.x,d.y,d.r*6);
+          grad.addColorStop(0,'rgba(1,250,191,.35)');
+          grad.addColorStop(1,'rgba(0,181,255,.00)');
+          ctx.fillStyle = grad;
+          ctx.beginPath(); ctx.arc(d.x,d.y,d.r*6,0,Math.PI*2); ctx.fill();
+        }
+        requestAnimationFrame(step);
+      }
+      step();
+    })();
+
+    /************ Nav/Menu + Init ************/
+    document.getElementById('menuBtn')?.addEventListener('click',()=>document.getElementById('sidebar').classList.toggle('open'));
+    route();           // render initial view
+    hydrateInlineIcons(); // ensure topbar/sidebar icons render on first load
+
+    /************ Accessibility niceties ************/
+    pinInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ tryUnlock(); }});
+  </script>
+</body>
+</html>
