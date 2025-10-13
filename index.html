@@ -238,6 +238,14 @@
       backdrop-filter: blur(22px);
     }
     .away canvas{position:absolute;inset:0;opacity:.6}
+
+    /* TOASTS */
+    .toast-wrap{position:fixed;right:18px;bottom:18px;display:grid;gap:8px;z-index:9999}
+    .toast{min-width:200px;max-width:420px;padding:10px 14px;border-radius:12px;background:var(--ink);color:#fff;box-shadow:var(--shadow-md);font-weight:700;display:flex;align-items:center;gap:8px;opacity:0;transform:translateY(8px) scale(.98);transition:opacity .18s ease,transform .18s ease}
+    .toast.show{opacity:1;transform:translateY(0) scale(1)}
+    .toast.success{background:linear-gradient(90deg,#01FABF,#00B5FF);color:#001014}
+    .toast.warn{background:#ef4444}
+    .toast .close{margin-left:auto;cursor:pointer;opacity:.8}
     .away .panel{position:relative;width:min(560px,92vw);padding:28px;border-radius:18px;backdrop-filter: blur(22px);background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow-md);text-align:center}
     .away .mark{width:64px;height:64px;border-radius:16px;margin:0 auto 12px auto;background:#0f172a;color:#01FABF;display:grid;place-items:center;font-weight:900;box-shadow:inset 0 0 0 3px rgba(1,250,191,.35);overflow:hidden}
     .away .mark img{width:100%;height:100%;object-fit:cover;display:none}
@@ -337,6 +345,8 @@
       <div class="container" id="view"><!-- routed content injects here --></div>
     </main>
   </div>
+  <!-- Toast container -->
+  <div id="toastWrap" class="toast-wrap" aria-live="polite" aria-atomic="true"></div>
 
   <!-- Away Mode 2.0 -->
   <div class="away" id="awayOverlay" aria-hidden="true">
@@ -801,14 +811,14 @@
             document.documentElement.style.setProperty('--radius', (theme.radius||14)+'px');
             if(theme.shadow === 'md') document.documentElement.style.setProperty('--shadow-sm','0 10px 30px rgba(2,6,23,.08)');
             else document.documentElement.style.setProperty('--shadow-sm','0 4px 14px rgba(2,6,23,.06)');
-            showToast('Applied theme');
+            if(typeof showToast === 'function') showToast('Theme applied', {type:'success'});
           }catch(e){ showToast('Apply theme failed'); }
         }
         function applyThemeFromInputs(){ applyTheme(getThemeInputs()); }
-        function saveThemePreset(){ const cfg = loadSettings(); cfg.presets = cfg.presets||[]; const t = getThemeInputs(); const name = prompt('Preset name'); if(!name) return; cfg.presets.push({ name, theme:t }); saveSettings(cfg); renderPresets(); }
+  function saveThemePreset(){ const cfg = loadSettings(); cfg.presets = cfg.presets||[]; const t = getThemeInputs(); const name = prompt('Preset name'); if(!name) return; cfg.presets.push({ name, theme:t }); saveSettings(cfg); renderPresets(); if(typeof showToast === 'function') showToast('Preset saved', {type:'success'}); }
         function renderPresets(){ const wrap = document.getElementById('presetsList'); if(!wrap) return; wrap.innerHTML=''; const cfg = loadSettings(); (cfg.presets||[]).forEach((p,i)=>{ const row = el('div',{style:'display:flex;gap:8px;align-items:center'},[ el('div',{style:'flex:1'},[document.createTextNode(p.name)]), el('button',{class:'chip',onclick:()=>{ applyTheme(p.theme); }},[document.createTextNode('Apply')]), el('button',{class:'chip',onclick:()=>{ if(confirm('Delete preset?')){ cfg.presets.splice(i,1); saveSettings(cfg); renderPresets(); } }},[document.createTextNode('Delete')]) ]); wrap.append(row); }); }
-        function exportThemePresets(){ const cfg = loadSettings(); const blob = new Blob([JSON.stringify(cfg.presets||[], null, 2)],{type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='elite-hq-theme-presets.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); showToast('Exported presets'); }
-        document.addEventListener('change', (e)=>{ if(e.target && e.target.id==='importThemePresets'){ const f = e.target.files && e.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = ()=>{ try{ const parsed = JSON.parse(r.result); const cfg = loadSettings(); cfg.presets = (cfg.presets||[]).concat(parsed); saveSettings(cfg); renderPresets(); showToast('Imported presets'); }catch(err){ showToast('Invalid presets file'); } }; r.readAsText(f); } });
+  function exportThemePresets(){ const cfg = loadSettings(); const blob = new Blob([JSON.stringify(cfg.presets||[], null, 2)],{type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='elite-hq-theme-presets.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); if(typeof showToast === 'function') showToast('Presets exported', {type:'success'}); }
+  document.addEventListener('change', (e)=>{ if(e.target && e.target.id==='importThemePresets'){ const f = e.target.files && e.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = ()=>{ try{ const parsed = JSON.parse(r.result); const cfg = loadSettings(); cfg.presets = (cfg.presets||[]).concat(parsed); saveSettings(cfg); renderPresets(); if(typeof showToast === 'function') showToast('Presets imported', {type:'success'}); }catch(err){ if(typeof showToast === 'function') showToast('Invalid presets file', {type:'warn'}); } }; r.readAsText(f); } });
         renderPresets();
     }
     function route(){
@@ -1814,6 +1824,8 @@
           const dataUrl = reader.result;
           localStorage.setItem(LOGO_KEY, dataUrl);
           applyLogos();
+          // show toast confirmation
+          if(typeof showToast === 'function') showToast('Logo updated', {type:'success'});
         };
         reader.readAsDataURL(f);
       });
@@ -1912,6 +1924,27 @@
 
     /************ Nav/Menu + Init ************/
   // (moved above, attached after DOMContentLoaded)
+    // toast helper
+    function showToast(message, opts={}){
+      try{
+        const wrap = document.getElementById('toastWrap'); if(!wrap) return;
+        const t = document.createElement('div'); t.className='toast';
+        if(opts.type==='success') t.classList.add('success');
+        if(opts.type==='warn' || opts.type==='warning') t.classList.add('warn');
+        t.textContent = message;
+        const close = document.createElement('span'); close.className='close'; close.textContent='✕'; close.setAttribute('role','button'); close.tabIndex=0;
+        close.addEventListener('click', ()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(),200); });
+        t.appendChild(close);
+        wrap.appendChild(t);
+        // show
+        requestAnimationFrame(()=> t.classList.add('show'));
+        const ttl = typeof opts.ttl === 'number' ? opts.ttl : 3500;
+        const to = setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(),200); }, ttl);
+        // keyboard dismiss
+        close.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' ') { e.preventDefault(); clearTimeout(to); t.classList.remove('show'); setTimeout(()=>t.remove(),200); } });
+      }catch(e){ console.warn('toast error', e); }
+    }
+
     route();           // render initial view
     hydrateInlineIcons(); // ensure topbar/sidebar icons render on first load
 
