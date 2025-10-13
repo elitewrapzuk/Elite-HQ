@@ -264,6 +264,15 @@
     /* TOAST */
     .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 14px;border-radius:999px;box-shadow:var(--shadow-md);z-index:120;opacity:0;pointer-events:none;transition:opacity .2s ease}
     .toast.show{opacity:1}
+    /* Drag & drop visuals for sidebar */
+    .nav a.dragging{opacity:.4}
+    .nav a.drop-target{outline:2px dashed rgba(1,250,191,.5);}
+    /* Mobile close button inside the sidebar */
+    .close-mobile{display:none}
+    @media (max-width:980px){
+      .close-mobile{display:block;position:absolute;top:12px;right:12px;background:transparent;border:none;font-size:20px;cursor:pointer;color:var(--muted)}
+      .sidebar{padding-top:40px}
+    }
   </style>
 </head>
 <body>
@@ -280,7 +289,9 @@
   <a href="#/calendar" data-route="calendar"><span class="ico" data-ico="calendar"></span>Calendar</a>
   <a href="#/suppliers" data-route="suppliers"><span class="ico" data-ico="shield"></span>Suppliers</a>
   <a href="#/email" data-route="email"><span class="ico" data-ico="mail"></span>Email</a>
+      <a href="#/settings" data-route="settings"><span class="ico" data-ico="settings"></span>Settings</a>
       </nav>
+        <button class="close-mobile" id="closeMobileBtn" aria-label="Close menu">✕</button>
     </aside>
 
     <main class="main">
@@ -291,10 +302,7 @@
         <div class="spacer"></div>
         <div class="top-actions">
           <div class="top-logo" title="Brand logo"><span>EW</span><img id="topLogoImg" alt=""></div>
-          <button class="icon-btn" id="uploadLogoBtn" title="Upload brand logo">
-            <span class="ico" data-ico="upload"></span><span>Upload Logo</span>
-            <input id="logoFile" type="file" accept=".png,.jpg,.jpeg,.svg" style="display:none">
-          </button>
+          <!-- Upload moved to Settings page -->
           <button class="icon-btn" id="awayBtn" title="Away Mode"><span class="ico" data-ico="shield"></span><span>Privacy</span></button>
           <div class="divider"></div>
           <div class="switch" id="modeSwitch" role="switch" aria-checked="false" tabindex="0" title="Toggle theme">
@@ -324,6 +332,29 @@
 
   <!-- Modals -->
   <div class="modal-backdrop" id="modalBackdrop" aria-hidden="true"></div>
+  <!-- Email Templates Modal -->
+  <div class="modal-backdrop" id="templatesBackdrop" style="display:none" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" id="templatesModal">
+      <header>
+        <h3>Email Templates</h3>
+        <div>
+          <button class="btn" id="newTemplateBtn">New</button>
+          <button class="close-x" id="closeTemplates">✕</button>
+        </div>
+      </header>
+      <div class="body">
+        <div id="templatesList"></div>
+        <div id="templateEditor" style="display:none">
+          <input id="tplTitle" class="input" placeholder="Template title">
+          <textarea id="tplBody" class="input" rows="8" placeholder="Template body (use {{name}} etc)"></textarea>
+        </div>
+      </div>
+      <div class="footer">
+        <button class="btn" id="cancelTpl">Cancel</button>
+        <button class="btn primary" id="saveTpl">Save</button>
+      </div>
+    </div>
+  </div>
   <!-- Toast -->
   <div class="toast" id="toast">Copied</div>
 
@@ -483,7 +514,7 @@
     }
 
     /************ Router ************/
-  const routes = { dashboard: renderDashboard, contacts: renderContacts, projects: renderProjects, calendar: renderCalendar, suppliers: renderSuppliers, email: renderEmail };
+  const routes = { dashboard: renderDashboard, contacts: renderContacts, projects: renderProjects, calendar: renderCalendar, suppliers: renderSuppliers, email: renderEmail, settings: renderSettings };
     // --- EMAIL VIEW ---
     const EMAIL_TEMPLATES = [
       { name: 'Blank', subject: '', body: '' },
@@ -562,6 +593,56 @@
           else showToast('Send failed');
         } catch(e){ showToast('Send error'); }
       });
+    }
+
+    /* Settings view */
+    const SETTINGS_KEY = 'ew_settings';
+    function loadSettings(){ return Store.get(SETTINGS_KEY, { tags: [], logoDataUrl: null, other: {} }); }
+    function saveSettings(s){ Store.set(SETTINGS_KEY, s); }
+
+    function renderSettings(){
+      const view = document.getElementById('view'); view.innerHTML = '';
+      const cfg = loadSettings();
+      const wrap = el('div',{},[
+        el('div',{class:'card pad'},[
+          el('div',{class:'section-title',html:'Branding & Logo'}),
+          el('div',{style:'display:flex;gap:12px;align-items:center'},[
+            el('div',{class:'top-logo',style:'width:64px;height:64px;border-radius:12px;overflow:hidden'},[ el('span',{},[document.createTextNode('EW')]), el('img',{id:'settingsLogoImg', src: cfg.logoDataUrl || '', alt:''}) ]),
+            el('div',{},[ el('div',{html:'Upload a brand logo (.png/.jpg/.svg)'}), el('div',{style:'height:8px'}), el('input',{type:'file',id:'logoFile',accept:'.png,.jpg,.jpeg,.svg'}) ])
+          ])
+        ]),
+        el('div',{style:'height:12px'}),
+        el('div',{class:'card pad'},[
+          el('div',{class:'section-title',html:'Tags & Metadata'}),
+          el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px'},[
+            el('input',{id:'newTag',class:'input',placeholder:'Add tag and press Enter'}), el('button',{class:'chip',onclick:addTag},[document.createTextNode('Add')])
+          ]),
+          el('div',{id:'tagsWrap',style:'display:flex;gap:8px;flex-wrap:wrap'}),
+          el('div',{style:'height:8px'}),
+          el('div',{class:'hint',html:'Tags help you categorize contacts, projects and suppliers.'})
+        ])
+      ]);
+      view.append(wrap);
+
+      const logoFile = document.getElementById('logoFile');
+      const settingsLogoImg = document.getElementById('settingsLogoImg');
+      function showLogo(dataUrl){ settingsLogoImg.style.display = dataUrl ? 'block' : 'none'; settingsLogoImg.src = dataUrl || ''; }
+      showLogo(cfg.logoDataUrl);
+      logoFile.addEventListener('change', async (e)=>{
+        const f = e.target.files && e.target.files[0]; if(!f) return;
+        const reader = new FileReader(); reader.onload = ()=>{
+          cfg.logoDataUrl = reader.result; saveSettings(cfg); showLogo(cfg.logoDataUrl);
+          // persist shared logo key so other UI elements update
+          try{ localStorage.setItem(LOGO_KEY, cfg.logoDataUrl); } catch(e){}
+          applyLogos();
+        }; reader.readAsDataURL(f);
+      });
+
+      // tags
+      function renderTags(){ const wrap = document.getElementById('tagsWrap'); wrap.innerHTML=''; cfg.tags.forEach((t,i)=>{ const pill = el('div',{class:'chip',style:'display:inline-flex;align-items:center;gap:8px'},[ document.createTextNode(t), el('button',{class:'chip',onclick:()=>{ cfg.tags.splice(i,1); saveSettings(cfg); renderTags(); }},[document.createTextNode('x')]) ]); wrap.append(pill); }); }
+      function addTag(){ const v = (document.getElementById('newTag').value||'').trim(); if(!v) return; if(!cfg.tags.includes(v)){ cfg.tags.push(v); saveSettings(cfg); renderTags(); document.getElementById('newTag').value=''; } }
+      document.getElementById('newTag').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); addTag(); } });
+      renderTags();
     }
     function route(){
       const hash = location.hash.replace('#/','') || 'dashboard';
@@ -944,6 +1025,168 @@
       }
     }
 
+    /************ Sidebar drag & reorder + Mobile toggle ************/
+    const NAV_ORDER_KEY = 'ew_nav_order';
+    const TEMPLATES_KEY = 'ew_email_templates';
+
+    function loadNavOrder(){
+      return Store.get(NAV_ORDER_KEY, null);
+    }
+    function saveNavOrder(order){ Store.set(NAV_ORDER_KEY, order); }
+
+    function applyNavOrder(){
+      const nav = document.getElementById('nav');
+      const saved = loadNavOrder();
+      if(!saved || !Array.isArray(saved)) return hydrateInlineIcons();
+      // reorder anchors by saved route list
+      const map = {};
+      $$('#nav a').forEach(a=> map[a.dataset.route]=a);
+      nav.innerHTML = '';
+      saved.forEach(route => { if(map[route]) nav.append(map[route]); });
+      // append any missing items
+      Object.values(map).forEach(a=>{ if(!nav.querySelector(`[data-route="${a.dataset.route}"]`)) nav.append(a); });
+      hydrateInlineIcons();
+    }
+    applyNavOrder();
+
+    function enableNavDrag(){
+      const nav = document.getElementById('nav');
+      let dragging = null;
+      nav.addEventListener('dragstart', e=>{ if(e.target.matches('a')){ dragging = e.target; e.dataTransfer.effectAllowed='move'; e.target.classList.add('dragging'); } });
+      nav.addEventListener('dragend', e=>{ if(dragging){ dragging.classList.remove('dragging'); dragging=null; } });
+      nav.addEventListener('dragover', e=>{ if(!dragging) return; e.preventDefault(); const over = e.target.closest('a'); if(!over || over===dragging) return; // highlight
+        $$('#nav a').forEach(a=>a.classList.toggle('drop-target', a===over));
+      });
+      nav.addEventListener('dragleave', e=>{ $$('#nav a').forEach(a=>a.classList.remove('drop-target')); });
+      nav.addEventListener('drop', e=>{ e.preventDefault(); const over = e.target.closest('a'); if(!over || !dragging || over===dragging) return; over.classList.remove('drop-target'); nav.insertBefore(dragging, over.nextSibling); // place after target
+        persistNavOrderFromDOM(); hydrationAfterChange();
+      });
+
+      // make anchors draggable and accessible
+      $$('#nav a').forEach(a=>{ a.setAttribute('draggable','true'); a.setAttribute('tabindex','0'); a.addEventListener('keydown', navKeyboardHandler); });
+    }
+
+    function navKeyboardHandler(e){
+      // allow Ctrl+ArrowUp / Ctrl+ArrowDown to move items for keyboard users
+      if(!(e.ctrlKey || e.metaKey)) return;
+      if(e.key==='ArrowUp' || e.key==='ArrowDown'){
+        e.preventDefault(); const a = e.currentTarget; const nav = document.getElementById('nav');
+        if(e.key==='ArrowUp' && a.previousElementSibling) nav.insertBefore(a, a.previousElementSibling);
+        if(e.key==='ArrowDown' && a.nextElementSibling) nav.insertBefore(a.nextElementSibling, a);
+        persistNavOrderFromDOM(); hydrationAfterChange(); a.focus();
+      }
+    }
+
+    function persistNavOrderFromDOM(){
+      const order = $$('#nav a').map(a=>a.dataset.route);
+      saveNavOrder(order);
+    }
+
+    function hydrationAfterChange(){
+      // reattach events for links and icons
+      $$('#nav a').forEach(a=> a.addEventListener('click', ()=>{ document.getElementById('sidebar').classList.remove('open'); }));
+      hydrateInlineIcons(); persist();
+    }
+
+    // Initialize drag and keyboard handlers
+    enableNavDrag();
+
+    // Menu open/close for mobile
+    const menuBtn = document.getElementById('menuBtn');
+    const sidebar = document.getElementById('sidebar');
+    const closeMobileBtn = document.getElementById('closeMobileBtn');
+    if(menuBtn){ menuBtn.addEventListener('click', ()=> sidebar.classList.toggle('open')); }
+    if(closeMobileBtn){ closeMobileBtn.addEventListener('click', ()=> sidebar.classList.remove('open')); }
+
+    // ensure clicking a nav link closes sidebar on mobile
+    $$('#nav a').forEach(a=> a.addEventListener('click', ()=>{ if(window.innerWidth <= 980) sidebar.classList.remove('open'); }));
+
+    /************ Email templates CRUD (localStorage) ************/
+    function loadTemplates(){ return Store.get(TEMPLATES_KEY, EMAIL_TEMPLATES); }
+    function saveTemplates(tpl){ Store.set(TEMPLATES_KEY, tpl); }
+
+    // Wire modal open when clicking Email nav
+    document.querySelector('[data-route="email"]').addEventListener('click', (e)=>{
+      // show email page as usual, but also allow opening template manager via long-press or separate button
+      // We'll add a small keyboard shortcut: Alt+T opens template manager
+      setTimeout(()=> route(), 10);
+    });
+
+    // Modal controls
+    const templatesBackdrop = document.getElementById('templatesBackdrop');
+    const templatesModal = document.getElementById('templatesModal');
+    const newTplBtn = document.getElementById('newTemplateBtn');
+    const closeTemplates = document.getElementById('closeTemplates');
+    const templatesList = document.getElementById('templatesList');
+    const editor = document.getElementById('templateEditor');
+    const tplTitle = document.getElementById('tplTitle');
+    const tplBody = document.getElementById('tplBody');
+    const saveTplBtn = document.getElementById('saveTpl');
+    const cancelTplBtn = document.getElementById('cancelTpl');
+
+    let editingIndex = null;
+
+    function openTemplatesModal(){
+      renderTemplatesList();
+      templatesBackdrop.style.display='flex'; templatesBackdrop.removeAttribute('aria-hidden');
+    }
+    function closeTemplatesModal(){ templatesBackdrop.style.display='none'; templatesBackdrop.setAttribute('aria-hidden','true'); editor.style.display='none'; editingIndex = null; }
+
+    function renderTemplatesList(){
+      const list = loadTemplates();
+      templatesList.innerHTML='';
+      if(!list.length) templatesList.append(el('div',{class:'empty',html:'No templates yet'}));
+      list.forEach((t,i)=>{
+        const row = el('div',{style:'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px'});
+        row.append(el('div',{html:`<strong>${t.name}</strong><div class="muted" style="font-size:12px;white-space:pre-wrap">${(t.subject||'')}</div>` }));
+        const actions = el('div',{style:'display:flex;gap:8px'},[
+          el('button',{class:'chip',onclick:()=>{ editingIndex=i; tplTitle.value=t.name; tplBody.value=t.body||''; editor.style.display='block'; tplTitle.focus(); }},[document.createTextNode('Edit')]),
+          el('button',{class:'chip',onclick:()=>{ if(confirm('Delete template?')){ const arr=loadTemplates(); arr.splice(i,1); saveTemplates(arr); renderTemplatesList(); } }},[document.createTextNode('Delete')])
+        ]);
+        row.append(actions);
+        templatesList.append(row);
+      });
+    }
+
+    newTplBtn.addEventListener('click', ()=>{ editingIndex=null; tplTitle.value=''; tplBody.value=''; editor.style.display='block'; tplTitle.focus(); });
+    closeTemplates.addEventListener('click', closeTemplatesModal);
+    cancelTplBtn.addEventListener('click', closeTemplatesModal);
+    saveTplBtn.addEventListener('click', ()=>{
+      const name = tplTitle.value.trim() || 'Untitled';
+      const body = tplBody.value || '';
+      const arr = loadTemplates();
+      if(editingIndex==null){ arr.push({ name, subject:'', body }); }
+      else { arr[editingIndex].name = name; arr[editingIndex].body = body; }
+      saveTemplates(arr); renderTemplatesList(); editor.style.display='none'; editingIndex=null; showToast('Template saved');
+    });
+
+    // open templates via Alt+T global shortcut
+    window.addEventListener('keydown', (e)=>{ if((e.altKey || e.metaKey) && e.key.toLowerCase()==='t'){ e.preventDefault(); openTemplatesModal(); } });
+
+    // Small helper: when on Email view, populate template select from stored templates
+    const originalRenderEmail = renderEmail;
+    renderEmail = function(){
+      originalRenderEmail();
+      const stored = loadTemplates();
+      const sel = document.getElementById('emailTemplate');
+      if(!sel) return;
+      sel.innerHTML = stored.map((t,i)=>`<option value="${i}">${t.name}</option>`).join('');
+      document.getElementById('templateList').innerHTML = stored.map((t,i)=>`<li><button class="chip" data-tpl="${i}">${t.name}</button></li>`).join('');
+      // wire the template buttons again
+      document.getElementById('templateList').addEventListener('click', e=>{ if(e.target.matches('button[data-tpl]')){ const t=loadTemplates()[+e.target.dataset.tpl]; document.getElementById('emailSubject').value=t.subject||''; document.getElementById('emailBody').value=t.body||''; sel.value = e.target.dataset.tpl; } });
+      // add a small "Manage" button near templates
+      const manage = el('button',{class:'btn', onclick: openTemplatesModal},[document.createTextNode('Manage Templates')]);
+      const container = document.querySelector('#view .card .row div[style*="flex:1"]');
+      if(container && !container.querySelector('.manage-templates')){
+        const wrap = el('div',{class:'manage-templates', style:'margin-top:10px'},[manage]);
+        container.append(wrap);
+      }
+    };
+
+    // finalize initial hydration
+    hydrateInlineIcons();
+
+
     /* SUPPLIERS — UPDATED */
     function renderSuppliers(){
       const wrap = el('div',{});
@@ -1313,21 +1556,24 @@
       }, supplier?'Save':'Add Supplier');
     }
 
-    /************ Brand Logo Upload (top-right) ************/
+    /************ Brand Logo Upload (shared) ************/
     const LOGO_KEY = 'ew_logo_dataurl';
-    const logoFile = $('#logoFile');
+    // header handler (may not exist if upload moved to settings)
+    const headerLogoFile = $('#logoFile');
     const uploadBtn = $('#uploadLogoBtn');
-    uploadBtn.addEventListener('click', ()=> logoFile.click());
-    logoFile.addEventListener('change', ()=>{
-      const f = logoFile.files?.[0]; if(!f) return;
-      const reader = new FileReader();
-      reader.onload = ()=>{
-        const dataUrl = reader.result;
-        localStorage.setItem(LOGO_KEY, dataUrl);
-        applyLogos();
-      };
-      reader.readAsDataURL(f);
-    });
+    if(uploadBtn && headerLogoFile){
+      uploadBtn.addEventListener('click', ()=> headerLogoFile.click());
+      headerLogoFile.addEventListener('change', ()=>{
+        const f = headerLogoFile.files?.[0]; if(!f) return;
+        const reader = new FileReader();
+        reader.onload = ()=>{
+          const dataUrl = reader.result;
+          localStorage.setItem(LOGO_KEY, dataUrl);
+          applyLogos();
+        };
+        reader.readAsDataURL(f);
+      });
+    }
     function applyLogos(){
       const dataUrl = localStorage.getItem(LOGO_KEY);
       const mark = $('#logoMark');

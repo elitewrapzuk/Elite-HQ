@@ -1,0 +1,17 @@
+# Node
+node_modules/
+
+# macOS
+.DS_Store
+
+# Playwright test output / artifacts
+playwright-report/
+test-results/
+.last-run.json
+*.log
+error-context.*
+
+# Editor folders
+.vscode/
+.idea/
+
