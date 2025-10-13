@@ -332,7 +332,7 @@
         <div class="top-actions">
           <!-- Removed topbar logo as requested -->
           <!-- Upload moved to Settings page -->
-          <button class="icon-btn" id="awayBtn" title="Away Mode"><span class="ico" data-ico="shield"></span><span>Privacy</span></button>
+          <button class="icon-btn" id="awayBtn" title="Away Mode" onclick="openAwayOverlay()" aria-haspopup="dialog" aria-controls="awayOverlay" aria-expanded="false"><span class="ico" data-ico="shield"></span><span>Privacy</span></button>
           <!-- Autosave indicator -->
           <div id="autosaveIndicator" class="muted" style="font-size:13px;padding:0 8px;display:flex;align-items:center;gap:8px">Autosave: <span id="autosaveState">—</span></div>
           <div class="divider"></div>
@@ -1877,9 +1877,15 @@
     function openAwayOverlay(){
       if(!away) return;
       away.style.display='flex';
+      away.setAttribute('aria-hidden','false');
+      // mark controlling buttons as expanded
+      const primary = document.getElementById('awayBtn'); if(primary) primary.setAttribute('aria-expanded','true');
+      const fb = document.getElementById('awayBtnFallback'); if(fb) fb.setAttribute('aria-expanded','true');
       try{ pinInput.value=''; pinInput.focus(); }catch(e){}
       if(typeof showToast === 'function') showToast('Privacy enabled', {type:'success'});
     }
+    // expose for inline onclick
+    window.openAwayOverlay = openAwayOverlay;
     const awayBtnEl = document.getElementById('awayBtn');
     if(awayBtnEl){
       awayBtnEl.addEventListener('click', openAwayOverlay);
@@ -1897,11 +1903,15 @@
     // Close on Escape and add keyboard shortcut Ctrl/Cmd+L to open
     document.addEventListener('keydown', (e)=>{
       if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='l'){ openAwayOverlay(); e.preventDefault(); }
-      if(e.key==='Escape' && away && away.style.display==='flex'){ away.style.display='none'; }
+      if(e.key==='Escape' && away && away.style.display==='flex'){
+        away.style.display='none'; away.setAttribute('aria-hidden','true');
+        const primary = document.getElementById('awayBtn'); if(primary) primary.setAttribute('aria-expanded','false');
+        const fb = document.getElementById('awayBtnFallback'); if(fb) fb.setAttribute('aria-expanded','false');
+      }
     });
 
     // clicking backdrop/outside the panel closes overlay
-    if(away){ away.addEventListener('click', (e)=>{ if(e.target === away) { away.style.display='none'; } }); }
+  if(away){ away.addEventListener('click', (e)=>{ if(e.target === away) { away.style.display='none'; away.setAttribute('aria-hidden','true'); const primary = document.getElementById('awayBtn'); if(primary) primary.setAttribute('aria-expanded','false'); const fb = document.getElementById('awayBtnFallback'); if(fb) fb.setAttribute('aria-expanded','false'); } }); }
 
     // Ensure there's always a clickable away button on desktop: create a fallback if original is missing/hidden
     (function ensureAwayBtnFallback(){
