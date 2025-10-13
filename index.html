@@ -620,11 +620,30 @@
           el('div',{id:'tagsWrap',style:'display:flex;gap:8px;flex-wrap:wrap'}),
           el('div',{style:'height:8px'}),
           el('div',{class:'hint',html:'Tags help you categorize contacts, projects and suppliers.'})
+        ]),
+        el('div',{style:'height:12px'}),
+        el('div',{class:'card pad'},[
+          el('div',{class:'section-title',html:'Email Templates'}),
+          el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px'},[
+            el('input',{id:'settingsTplSearch',class:'input',placeholder:'Search templates...'}), el('button',{class:'chip',id:'settingsNewTpl'},[document.createTextNode('+ New Template')])
+          ]),
+          el('div',{id:'settingsTemplatesList',style:'display:grid;gap:8px;max-height:260px;overflow:auto'}),
+          el('div',{id:'settingsTplEditor',style:'display:none;margin-top:8px'},[
+            el('div',{style:'display:grid;gap:8px'},[
+              el('input',{id:'settingsTplTitle',class:'input',placeholder:'Template title'}),
+              el('input',{id:'settingsTplSubject',class:'input',placeholder:'Subject (optional)'}),
+              el('textarea',{id:'settingsTplBody',class:'input',rows:6,placeholder:'Template body (use placeholders like {{name}})'}),
+              el('div',{style:'display:flex;gap:8px;justify-content:flex-end'},[
+                el('button',{class:'btn',id:'settingsTplCancel'},[document.createTextNode('Cancel')]),
+                el('button',{class:'btn primary',id:'settingsTplSave'},[document.createTextNode('Save Template')])
+              ])
+            ])
+          ])
         ])
       ]);
       view.append(wrap);
 
-      const logoFile = document.getElementById('logoFile');
+  const logoFile = document.getElementById('logoFile');
       const settingsLogoImg = document.getElementById('settingsLogoImg');
       function showLogo(dataUrl){ settingsLogoImg.style.display = dataUrl ? 'block' : 'none'; settingsLogoImg.src = dataUrl || ''; }
       showLogo(cfg.logoDataUrl);
@@ -643,6 +662,48 @@
       function addTag(){ const v = (document.getElementById('newTag').value||'').trim(); if(!v) return; if(!cfg.tags.includes(v)){ cfg.tags.push(v); saveSettings(cfg); renderTags(); document.getElementById('newTag').value=''; } }
       document.getElementById('newTag').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); addTag(); } });
       renderTags();
+
+      // Templates management in Settings
+      const settingsList = document.getElementById('settingsTemplatesList');
+      const settingsEditor = document.getElementById('settingsTplEditor');
+      const settingsNewBtn = document.getElementById('settingsNewTpl');
+      const settingsCancel = document.getElementById('settingsTplCancel');
+      const settingsSave = document.getElementById('settingsTplSave');
+      const settingsTitle = document.getElementById('settingsTplTitle');
+      const settingsSubject = document.getElementById('settingsTplSubject');
+      const settingsBody = document.getElementById('settingsTplBody');
+      let settingsEditing = null;
+
+      function renderSettingsTemplates(filter){
+        const arr = loadTemplates();
+        settingsList.innerHTML='';
+  const list = filter ? arr.filter(t=> t.name.toLowerCase().includes(filter.toLowerCase()) || (t.subject||'').toLowerCase().includes(filter.toLowerCase())) : arr;
+        if(!list.length) settingsList.append(el('div',{class:'empty',html:'No templates yet'}));
+        list.forEach((t,i)=>{
+          const node = el('div',{style:'display:flex;align-items:center;justify-content:space-between;gap:8px'},[
+            el('div',{html:`<strong>${t.name}</strong><div class="muted" style="font-size:12px;white-space:pre-wrap">${(t.subject||'')}</div>`}),
+            el('div',{},[
+              el('button',{class:'chip',onclick:()=>{ settingsEditing = i; settingsTitle.value=t.name; settingsSubject.value=t.subject||''; settingsBody.value=t.body||''; settingsEditor.style.display='block'; settingsTitle.focus(); }},[document.createTextNode('Edit')]),
+              el('button',{class:'chip',onclick:()=>{ if(confirm('Delete template?')){ const arr2 = loadTemplates(); arr2.splice(i,1); saveTemplates(arr2); renderSettingsTemplates(document.getElementById('settingsTplSearch').value||''); showToast('Template deleted'); } }},[document.createTextNode('Delete')])
+            ])
+          ]);
+          settingsList.append(node);
+        });
+      }
+
+      document.getElementById('settingsTplSearch').addEventListener('input', (e)=> renderSettingsTemplates(e.target.value));
+      settingsNewBtn.addEventListener('click', ()=>{ settingsEditing = null; settingsTitle.value=''; settingsSubject.value=''; settingsBody.value=''; settingsEditor.style.display='block'; settingsTitle.focus(); });
+      settingsCancel.addEventListener('click', ()=>{ settingsEditor.style.display='none'; settingsEditing=null; });
+      settingsSave.addEventListener('click', ()=>{
+        const name = settingsTitle.value.trim() || 'Untitled';
+        const subj = settingsSubject.value || '';
+        const body = settingsBody.value || '';
+        const arr = loadTemplates();
+        if(settingsEditing==null){ arr.push({ name, subject:subj, body }); settingsEditing = arr.length-1; }
+        else { arr[settingsEditing].name = name; arr[settingsEditing].subject = subj; arr[settingsEditing].body = body; }
+        saveTemplates(arr); renderSettingsTemplates(); settingsEditor.style.display='none'; settingsEditing=null; showToast('Template saved');
+      });
+      renderSettingsTemplates();
     }
     function route(){
       const hash = location.hash.replace('#/','') || 'dashboard';

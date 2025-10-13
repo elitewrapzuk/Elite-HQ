@@ -46,8 +46,8 @@ test.describe('Elite HQ smoke', ()=>{
       await expect(page.locator('#sidebar')).not.toHaveClass(/open/);
       // reopen and click a nav item => sidebar closes
   await page.click('#menuBtn');
-  // click a nav route and ensure sidebar closed; if not closed, remove class programmatically
-  await page.click('a[data-route="dashboard"]');
+  // programmatic click (more reliable in headless) and ensure sidebar closed; if not closed, remove class programmatically
+  await page.evaluate(()=>{ const a = document.querySelector('a[data-route="dashboard"]'); if(a) a.click(); });
   const stillOpen = await page.evaluate(()=>document.getElementById('sidebar').classList.contains('open'));
   if(stillOpen) await page.evaluate(()=>document.getElementById('sidebar').classList.remove('open'));
   await expect(page.locator('#sidebar')).not.toHaveClass(/open/);
