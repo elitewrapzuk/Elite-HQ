@@ -572,7 +572,7 @@
             <label>Subject:<input class="input" id="emailSubject" type="text" placeholder="Subject"></label><br>
             <label>Template:
               <select class="input" id="emailTemplate">
-                ${EMAIL_TEMPLATES.map((t,i)=>`<option value="${i}">${t.name}</option>`).join('')}
+                ${loadTemplates().map((t,i)=>`<option value="${i}">${t.name}</option>`).join('')}
               </select>
             </label><br>
             <label>Body:<textarea class="input" id="emailBody" rows="8" placeholder="Write your email..."></textarea></label><br>
@@ -595,17 +595,9 @@
       const subjectEl = document.getElementById('emailSubject');
       const bodyEl = document.getElementById('emailBody');
       templateSel.addEventListener('change', e => {
-        const t = EMAIL_TEMPLATES[+e.target.value];
-        subjectEl.value = t.subject;
-        bodyEl.value = t.body;
-      });
-      document.getElementById('templateList').addEventListener('click', e => {
-        if(e.target.matches('button[data-tpl]')){
-          const t = EMAIL_TEMPLATES[+e.target.dataset.tpl];
-          subjectEl.value = t.subject;
-          bodyEl.value = t.body;
-          templateSel.value = e.target.dataset.tpl;
-        }
+        const t = loadTemplates()[+e.target.value] || {subject:'', body:''};
+        subjectEl.value = t.subject || '';
+        bodyEl.value = t.body || '';
       });
 
       // Send email (calls Google Apps Script endpoint)
@@ -1510,7 +1502,13 @@
       sel.innerHTML = stored.map((t,i)=>`<option value="${i}">${t.name}</option>`).join('');
       document.getElementById('templateList').innerHTML = stored.map((t,i)=>`<li><button class="chip" data-tpl="${i}">${t.name}</button></li>`).join('');
       // wire the template buttons again
-      document.getElementById('templateList').addEventListener('click', e=>{ if(e.target.matches('button[data-tpl]')){ const t=loadTemplates()[+e.target.dataset.tpl]; document.getElementById('emailSubject').value=t.subject||''; document.getElementById('emailBody').value=t.body||''; sel.value = e.target.dataset.tpl; } });
+  const tplListEl = document.getElementById('templateList');
+  // replace content
+  tplListEl.innerHTML = stored.map((t,i)=>`<li><button class="chip" data-tpl="${i}">${t.name}</button></li>`).join('');
+  // remove any previous handler by cloning
+  const newTplList = tplListEl.cloneNode(true);
+  tplListEl.parentNode.replaceChild(newTplList, tplListEl);
+  newTplList.addEventListener('click', e=>{ if(e.target.matches('button[data-tpl]')){ const t=loadTemplates()[+e.target.dataset.tpl]; document.getElementById('emailSubject').value=t.subject||''; document.getElementById('emailBody').value=t.body||''; sel.value = e.target.dataset.tpl; } });
       // add a small "Manage" button near templates
       const manage = el('button',{class:'btn', onclick: openTemplatesModal},[document.createTextNode('Manage Templates')]);
       const container = document.querySelector('#view .card .row div[style*="flex:1"]');
