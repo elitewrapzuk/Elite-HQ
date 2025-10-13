@@ -741,8 +741,60 @@
           ])
         ])
       ])
+      ,
+      el('div',{style:'height:12px'}),
+      el('div',{class:'card pad'},[
+        el('div',{class:'section-title',html:'Email Templates'}),
+        el('div',{style:'display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start'},[
+          el('div',{},[
+            el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px'},[
+              el('button',{class:'chip',id:'settingsNewTplBtn'},[document.createTextNode('+ New Template')]),
+              el('div',{class:'hint',style:'margin-left:8px'},[document.createTextNode('Create or edit email templates used in Compose → Email')])
+            ]),
+            el('div',{id:'settingsTemplatesList',style:'display:flex;flex-direction:column;gap:8px',html:''})
+          ]),
+          el('div',{},{
+            // editor area
+          })
+        ])
+      ])
       ]);
       view.append(wrap);
+
+      // Settings: Templates inline editor wiring
+      (function wireSettingsTemplates(){
+        const listWrap = document.getElementById('settingsTemplatesList');
+        const newBtn = document.getElementById('settingsNewTplBtn');
+        // create editor area on the right side
+        const editorCol = listWrap.parentElement.nextElementSibling || listWrap.parentElement.parentElement.querySelector('.card .body');
+        const editor = el('div',{id:'settingsTplEditor'},[
+          el('div',{},[ el('div',{style:'font-weight:700;margin-bottom:6px'},[document.createTextNode('Title')]), el('input',{id:'settingsTplTitle',class:'input'}) ]),
+          el('div',{style:'height:8px'}),
+          el('div',{},[ el('div',{style:'font-weight:700;margin-bottom:6px'},[document.createTextNode('Body')]), el('textarea',{id:'settingsTplBody',class:'input',rows:8}) ]),
+          el('div',{style:'height:8px'}),
+          el('div',{style:'display:flex;gap:8px'},[
+            el('button',{class:'btn primary',id:'settingsSaveTplBtn'},[document.createTextNode('Save')]),
+            el('button',{class:'btn',id:'settingsCancelTplBtn'},[document.createTextNode('Cancel')])
+          ])
+        ]);
+        // append editor into the right column
+        const parentGrid = document.querySelector('#view .card.pad .section-title + div[style*="grid-template-columns"]');
+        if(parentGrid){ parentGrid.querySelectorAll('div')[1].innerHTML=''; parentGrid.querySelectorAll('div')[1].appendChild(editor); }
+
+        let editing = null;
+        function renderList(){ const arr = loadTemplates(); listWrap.innerHTML=''; if(!arr.length) listWrap.append(el('div',{class:'empty',html:'No templates yet'})); arr.forEach((t,i)=>{ const row = el('div',{style:'display:flex;align-items:center;justify-content:space-between;gap:8px'},[ el('div',{style:'flex:1'},[ el('strong',{},[document.createTextNode(t.name)]), el('div',{class:'muted',style:'font-size:12px;white-space:pre-wrap'},[document.createTextNode(t.body?.slice(0,120)||'')]) ]), el('div',{style:'display:flex;gap:8px'},[ el('button',{class:'chip',onclick:()=>{ editing=i; document.getElementById('settingsTplTitle').value = t.name; document.getElementById('settingsTplBody').value = t.body||''; }},[document.createTextNode('Edit')]), el('button',{class:'chip',onclick:()=>{ if(confirm('Delete template?')){ const a = loadTemplates(); a.splice(i,1); saveTemplates(a); renderList(); showToast('Template deleted'); } }},[document.createTextNode('Delete')]) ]) ]); listWrap.append(row); }); }
+
+        newBtn.addEventListener('click', ()=>{ editing=null; document.getElementById('settingsTplTitle').value=''; document.getElementById('settingsTplBody').value=''; document.getElementById('settingsTplTitle').focus(); });
+        document.getElementById('settingsCancelTplBtn').addEventListener('click', ()=>{ editing=null; document.getElementById('settingsTplTitle').value=''; document.getElementById('settingsTplBody').value=''; });
+        document.getElementById('settingsSaveTplBtn').addEventListener('click', ()=>{
+          const name = (document.getElementById('settingsTplTitle').value||'').trim() || 'Untitled';
+          const body = document.getElementById('settingsTplBody').value||'';
+          const arr = loadTemplates();
+          if(editing==null) arr.push({ name, subject:'', body }); else { arr[editing].name = name; arr[editing].body = body; }
+          saveTemplates(arr); renderList(); editing=null; showToast('Template saved', {type:'success'});
+        });
+        renderList();
+      })();
 
       const logoFile = document.getElementById('logoFile');
       const settingsLogoImg = document.getElementById('settingsLogoImg');
