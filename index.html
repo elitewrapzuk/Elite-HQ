@@ -715,6 +715,10 @@
           const row = el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px'},[
             el('input',{value:t.name,class:'input',style:'flex:1'}),
             el('input',{type:'color',value:t.color,style:'width:44px;height:36px;padding:4px;border-radius:8px;border:1px solid var(--line)'}),
+            el('div',{},[
+              el('button',{class:'chip',onclick:()=>{ if(i>0){ const tmp = cfg.tags[i-1]; cfg.tags[i-1]=cfg.tags[i]; cfg.tags[i]=tmp; saveSettings(cfg); refreshList(); renderTags(); } }},[document.createTextNode('↑')]),
+              el('button',{class:'chip',onclick:()=>{ if(i<cfg.tags.length-1){ const tmp = cfg.tags[i+1]; cfg.tags[i+1]=cfg.tags[i]; cfg.tags[i]=tmp; saveSettings(cfg); refreshList(); renderTags(); } }},[document.createTextNode('↓')]),
+            ]),
             el('button',{class:'chip',onclick:()=>{ cfg.tags.splice(i,1); saveSettings(cfg); refreshList(); renderTags(); }},[document.createTextNode('Delete')])
           ]);
           // wire inline edits
@@ -864,6 +868,7 @@
           el('option',{value:'Supplier',html:'Supplier'}),
           el('option',{value:'Other',html:'Other'}),
         ]),
+        el('select',{id:'contactTagFilter',class:'input',style:'width:auto;margin-left:6px'},[ el('option',{value:'all',html:'All Tags'}) ]),
         el('button',{class:'chip',onclick:()=>openContactModal()},[document.createTextNode('+ Add Contact')])
       ]);
       toolbar.append(left,right);
@@ -880,8 +885,8 @@
           el('div',{class:'contact-meta',html:[
             c.type||'Other',
             c.company?` • ${c.company}`:'',
-            (c.phone||c.email)?`<br>${c.phone||''}${c.email?(' • '+c.email):''}`:''
-          ].join('')})
+            (c.phone||c.email)?`<br>${c.phone||''}${c.email?(' • '+c.email):''}`:'',
+          ].join('') + (c.tags && c.tags.length ? ('<div style="height:6px"></div>' + c.tags.map(t=>`<span class="chip" style="display:inline-block;margin-right:6px;background:var(--nav-hover)">${t}</span>`).join('')) : '')})
         ]);
 
         const actions = el('div',{class:'contact-actions'},[
@@ -906,7 +911,9 @@
           (c.email||'').toLowerCase().includes(q) ||
           (c.phone||'').toLowerCase().includes(q)
         ));
-        if(f!=='all') items = items.filter(c=> (c.type||'Other')===f);
+  if(f!=='all') items = items.filter(c=> (c.type||'Other')===f);
+  const tf = $('#contactTagFilter') ? $('#contactTagFilter').value : 'all';
+  if(tf && tf!=='all') items = items.filter(c=> (c.tags||[]).includes(tf));
 
         items.sort((a,b)=> (a.name||'').localeCompare(b.name||'', undefined, {sensitivity:'base'}));
 
@@ -918,6 +925,8 @@
       }
       $('#contactSearch').addEventListener('input',refresh);
       $('#contactFilter').addEventListener('change',refresh);
+      // populate contact tag filter
+      (function populateContactTagFilter(){ const sel = $('#contactTagFilter'); if(!sel) return; const settings = loadSettings(); (settings.tags||[]).forEach(t=> sel.append(el('option',{value:t.name,html:t.name}))); sel.addEventListener('change',refresh); })();
       refresh();
     }
 
@@ -944,6 +953,8 @@
           el('option',{value:'In Progress',html:'In Progress'}),
           el('option',{value:'Completed',html:'Completed'}),
         ]),
+        // tag filter
+        el('select',{id:'projectTagFilter',class:'input',style:'width:auto;margin-left:6px'},[ el('option',{value:'all',html:'All Tags'}) ]),
         el('button',{class:'chip',onclick:()=>openProjectModal()},[document.createTextNode('+ Add Project')])
       ]);
       toolbar.append(left,right);
@@ -959,11 +970,13 @@
 
       function refresh(){
         const q = $('#projectSearch').value?.toLowerCase() || '';
-        const f = $('#projectFilter').value;
+  const f = $('#projectFilter').value;
+  const tf = $('#projectTagFilter') ? $('#projectTagFilter').value : 'all';
         const body = $('#projectsTable tbody');
         body.innerHTML='';
         let items = db.projects.filter(p => ((p.name||'').toLowerCase().includes(q) || (p.client||'').toLowerCase().includes(q)));
-        if(f!=='all') items = items.filter(p=> (p.status||'Planning')===f);
+  if(f!=='all') items = items.filter(p=> (p.status||'Planning')===f);
+  if(tf && tf!=='all') items = items.filter(p=> (p.tags||[]).includes(tf));
         if(!items.length){ body.append(el('tr',{},[el('td',{colspan:6,class:'empty',html:'No projects yet. Add your first project to get started.'})])); return; }
         items.forEach(p=>{
           body.append(el('tr',{},[
@@ -981,6 +994,8 @@
       }
       $('#projectSearch').addEventListener('input',refresh);
       $('#projectFilter').addEventListener('change',refresh);
+      // populate tag filter
+      (function populateProjectTagFilter(){ const sel = $('#projectTagFilter'); if(!sel) return; const settings = loadSettings(); (settings.tags||[]).forEach(t=> sel.append(el('option',{value:t.name,html:t.name}))); sel.addEventListener('change',refresh); })();
       refresh();
     }
 
@@ -1577,6 +1592,7 @@
         formField('Status', statusSel),
         el('div',{class:'row',style:'gap:12px'},[formField('Start Date', startIn), formField('End Date', endIn)]),
         formField('Budget (£)', budgetIn),
+        formField('Tags', el('div',{id:'projectTagWrap',style:'display:flex;gap:8px;flex-wrap:wrap'},[])),
         formField('Vinyl', vinylIn, 'Material/series/finish'),
         formField('Notes', notesIn, 'Optional')
       ]);
@@ -1589,6 +1605,7 @@
           start:startIn.value,
           end:endIn.value,
           budget:+budgetIn.value||0,
+          tags: Array.from(document.querySelectorAll('#projectTagWrap .tag-toggle.selected')).map(n=>n.dataset.tag),
           vinyl:vinylIn.value.trim(),
           notes:notesIn.value.trim()
         };
@@ -1602,6 +1619,9 @@
         }
         persist(); renderProjects(); return true;
       }, project?'Save':'Add Project');
+
+  // render project tag options
+  (function renderProjectTagOptions(){ const wrap = document.getElementById('projectTagWrap'); if(!wrap) return; wrap.innerHTML=''; const settings = loadSettings(); (settings.tags||[]).forEach(t=>{ const btn = el('button',{class:'chip tag-toggle',dataset:{tag:t.name},onclick:(e)=>{ e.preventDefault(); e.currentTarget.classList.toggle('selected'); }},[document.createTextNode(t.name)]); if(project && (project.tags||[]).includes(t.name)) btn.classList.add('selected'); wrap.append(btn); }); })();
     }
 
     function openEventModal(event){
@@ -1669,14 +1689,18 @@
       const layout = el('div',{},[
         formField('Name', nameIn),
         formField('URL', urlIn),
+        formField('Tags', el('div',{id:'supplierTagWrap',style:'display:flex;gap:8px;flex-wrap:wrap'},[])),
         formField('Logo', el('div',{},[logoPrev, el('div',{style:'height:8px'}), pickBtn]), 'PNG/JPG/SVG')
       ]);
       openModal(title, layout, ()=>{
-        const payload = { name: nameIn.value.trim(), url: urlIn.value.trim(), logo: img.src||'' };
+  const payload = { name: nameIn.value.trim(), url: urlIn.value.trim(), logo: img.src||'', tags: Array.from(document.querySelectorAll('#supplierTagWrap .tag-toggle.selected')).map(n=>n.dataset.tag) };
         if(!payload.name || !payload.url){ alert('Please provide a name and URL.'); return false; }
         if(supplier){ Object.assign(supplier, payload); } else { db.suppliers.push({ id: crypto.randomUUID(), ...payload }); }
         persist(); refreshSuppliers(); return true;
       }, supplier?'Save':'Add Supplier');
+
+  // render supplier tag options
+  (function renderSupplierTagOptions(){ const wrap = document.getElementById('supplierTagWrap'); if(!wrap) return; wrap.innerHTML=''; const settings = loadSettings(); (settings.tags||[]).forEach(t=>{ const btn = el('button',{class:'chip tag-toggle',dataset:{tag:t.name},onclick:(e)=>{ e.preventDefault(); e.currentTarget.classList.toggle('selected'); }},[document.createTextNode(t.name)]); if(supplier && (supplier.tags||[]).includes(t.name)) btn.classList.add('selected'); wrap.append(btn); }); })();
     }
 
     /************ Brand Logo Upload (shared) ************/
