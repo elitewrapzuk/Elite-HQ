@@ -747,26 +747,24 @@
         el('div',{class:'section-title',html:'Email Templates'}),
         el('div',{style:'display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start'},[
           el('div',{},[
-            el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px'},[
-              el('button',{class:'chip',id:'settingsNewTplBtn'},[document.createTextNode('+ New Template')]),
-              el('div',{class:'hint',style:'margin-left:8px'},[document.createTextNode('Create or edit email templates used in Compose → Email')])
+              el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px'},[
+                el('button',{class:'chip',id:'settingsNewTplBtn'},[document.createTextNode('+ New Template')]),
+                el('div',{class:'hint',style:'margin-left:8px'},[document.createTextNode('Create or edit email templates used in Compose → Email')])
+              ]),
+              el('div',{id:'settingsTemplatesList',style:'display:flex;flex-direction:column;gap:8px',html:''})
             ]),
-            el('div',{id:'settingsTemplatesList',style:'display:flex;flex-direction:column;gap:8px',html:''})
-          ]),
-          el('div',{},{
-            // editor area
-          })
+            el('div',{},[])
         ])
       ])
       ]);
       view.append(wrap);
 
-      // Settings: Templates inline editor wiring
+      // Settings: Templates inline editor wiring (robust)
       (function wireSettingsTemplates(){
         const listWrap = document.getElementById('settingsTemplatesList');
         const newBtn = document.getElementById('settingsNewTplBtn');
-        // create editor area on the right side
-        const editorCol = listWrap.parentElement.nextElementSibling || listWrap.parentElement.parentElement.querySelector('.card .body');
+        if(!listWrap || !newBtn) return;
+        // create editor area
         const editor = el('div',{id:'settingsTplEditor'},[
           el('div',{},[ el('div',{style:'font-weight:700;margin-bottom:6px'},[document.createTextNode('Title')]), el('input',{id:'settingsTplTitle',class:'input'}) ]),
           el('div',{style:'height:8px'}),
@@ -777,21 +775,23 @@
             el('button',{class:'btn',id:'settingsCancelTplBtn'},[document.createTextNode('Cancel')])
           ])
         ]);
-        // append editor into the right column
-        const parentGrid = document.querySelector('#view .card.pad .section-title + div[style*="grid-template-columns"]');
-        if(parentGrid){ parentGrid.querySelectorAll('div')[1].innerHTML=''; parentGrid.querySelectorAll('div')[1].appendChild(editor); }
+        // append editor into the second column of the templates grid (safe traversal)
+        const grid = listWrap.parentElement && listWrap.parentElement.parentElement;
+        if(grid && grid.children && grid.children[1]){
+          grid.children[1].innerHTML = '';
+          grid.children[1].appendChild(editor);
+        }
 
         let editing = null;
-        function renderList(){ const arr = loadTemplates(); listWrap.innerHTML=''; if(!arr.length) listWrap.append(el('div',{class:'empty',html:'No templates yet'})); arr.forEach((t,i)=>{ const row = el('div',{style:'display:flex;align-items:center;justify-content:space-between;gap:8px'},[ el('div',{style:'flex:1'},[ el('strong',{},[document.createTextNode(t.name)]), el('div',{class:'muted',style:'font-size:12px;white-space:pre-wrap'},[document.createTextNode(t.body?.slice(0,120)||'')]) ]), el('div',{style:'display:flex;gap:8px'},[ el('button',{class:'chip',onclick:()=>{ editing=i; document.getElementById('settingsTplTitle').value = t.name; document.getElementById('settingsTplBody').value = t.body||''; }},[document.createTextNode('Edit')]), el('button',{class:'chip',onclick:()=>{ if(confirm('Delete template?')){ const a = loadTemplates(); a.splice(i,1); saveTemplates(a); renderList(); showToast('Template deleted'); } }},[document.createTextNode('Delete')]) ]) ]); listWrap.append(row); }); }
+        function renderList(){ const arr = loadTemplates(); listWrap.innerHTML=''; if(!arr.length) listWrap.append(el('div',{class:'empty',html:'No templates yet'})); arr.forEach((t,i)=>{ const row = el('div',{style:'display:flex;align-items:center;justify-content:space-between;gap:8px'},[ el('div',{style:'flex:1'},[ el('strong',{},[document.createTextNode(t.name)]), el('div',{class:'muted',style:'font-size:12px;white-space:pre-wrap'},[document.createTextNode((t.body||'').slice(0,120)||'')]) ]), el('div',{style:'display:flex;gap:8px'},[ el('button',{class:'chip',onclick:()=>{ editing=i; const titleEl = document.getElementById('settingsTplTitle'); const bodyEl = document.getElementById('settingsTplBody'); if(titleEl) titleEl.value = t.name; if(bodyEl) bodyEl.value = t.body||''; }},[document.createTextNode('Edit')]), el('button',{class:'chip',onclick:()=>{ if(confirm('Delete template?')){ const a = loadTemplates(); a.splice(i,1); saveTemplates(a); renderList(); if(typeof showToast === 'function') showToast('Template deleted'); } }},[document.createTextNode('Delete')]) ]) ]); listWrap.append(row); }); }
 
-        newBtn.addEventListener('click', ()=>{ editing=null; document.getElementById('settingsTplTitle').value=''; document.getElementById('settingsTplBody').value=''; document.getElementById('settingsTplTitle').focus(); });
-        document.getElementById('settingsCancelTplBtn').addEventListener('click', ()=>{ editing=null; document.getElementById('settingsTplTitle').value=''; document.getElementById('settingsTplBody').value=''; });
-        document.getElementById('settingsSaveTplBtn').addEventListener('click', ()=>{
-          const name = (document.getElementById('settingsTplTitle').value||'').trim() || 'Untitled';
-          const body = document.getElementById('settingsTplBody').value||'';
+        newBtn.addEventListener('click', ()=>{ editing=null; const titleEl = document.getElementById('settingsTplTitle'); const bodyEl = document.getElementById('settingsTplBody'); if(titleEl) titleEl.value=''; if(bodyEl) bodyEl.value=''; if(titleEl) titleEl.focus(); });
+        const cancelBtn = document.getElementById('settingsCancelTplBtn'); if(cancelBtn) cancelBtn.addEventListener('click', ()=>{ editing=null; const titleEl = document.getElementById('settingsTplTitle'); const bodyEl = document.getElementById('settingsTplBody'); if(titleEl) titleEl.value=''; if(bodyEl) bodyEl.value=''; });
+        const saveBtn = document.getElementById('settingsSaveTplBtn'); if(saveBtn) saveBtn.addEventListener('click', ()=>{
+          const titleEl = document.getElementById('settingsTplTitle'); const bodyEl = document.getElementById('settingsTplBody'); const name = (titleEl && titleEl.value||'').trim() || 'Untitled'; const body = (bodyEl && bodyEl.value) || '';
           const arr = loadTemplates();
           if(editing==null) arr.push({ name, subject:'', body }); else { arr[editing].name = name; arr[editing].body = body; }
-          saveTemplates(arr); renderList(); editing=null; showToast('Template saved', {type:'success'});
+          saveTemplates(arr); renderList(); editing=null; if(typeof showToast === 'function') showToast('Template saved', {type:'success'});
         });
         renderList();
       })();
@@ -1894,7 +1894,9 @@
       });
     }
     function applyLogos(){
-      const dataUrl = localStorage.getItem(LOGO_KEY);
+      // prefer the Settings-stored logo (single source of truth), fallback to legacy LOGO_KEY
+      const settingsLogo = (function(){ try{ return loadSettings().logoDataUrl; }catch(e){ return null; } })();
+      const dataUrl = settingsLogo || localStorage.getItem(LOGO_KEY);
       const mark = $('#logoMark');
       const markImg = $('#logoMarkImg');
       const topImg = $('#topLogoImg');
