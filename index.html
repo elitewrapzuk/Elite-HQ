@@ -1848,16 +1848,19 @@
       const topImg = $('#topLogoImg');
       const awayImg = $('#awayLogoImg');
       if(dataUrl){
-        mark.querySelector('span')?.style && (mark.querySelector('span').style.display='none');
-        topImg.previousElementSibling && (topImg.previousElementSibling.style.display='none');
-        awayImg.previousElementSibling && (awayImg.previousElementSibling.style.display='none');
-        markImg.src=dataUrl; topImg.src=dataUrl; awayImg.src=dataUrl;
-        markImg.style.display='block'; topImg.style.display='block'; awayImg.style.display='block';
+        if(mark && mark.querySelector('span') && mark.querySelector('span').style) mark.querySelector('span').style.display='none';
+        if(topImg && topImg.previousElementSibling) topImg.previousElementSibling.style.display='none';
+        if(awayImg && awayImg.previousElementSibling) awayImg.previousElementSibling.style.display='none';
+        if(markImg){ markImg.src = dataUrl; markImg.style.display='block'; }
+        if(topImg){ topImg.src = dataUrl; topImg.style.display='block'; }
+        if(awayImg){ awayImg.src = dataUrl; awayImg.style.display='block'; }
       }else{
-        mark.querySelector('span')?.style && (mark.querySelector('span').style.display='grid');
+        if(mark && mark.querySelector('span') && mark.querySelector('span').style) mark.querySelector('span').style.display='grid';
         const topSpan = document.querySelector('.top-logo span'); if(topSpan) topSpan.style.display='grid';
         const awaySpan = document.querySelector('.away .mark span'); if(awaySpan) awaySpan.style.display='grid';
-        markImg.style.display='none'; topImg.style.display='none'; awayImg.style.display='none';
+        if(markImg) markImg.style.display='none';
+        if(topImg) topImg.style.display='none';
+        if(awayImg) awayImg.style.display='none';
       }
     }
     applyLogos();
@@ -1886,13 +1889,14 @@
 
     // robust away button handler: attach directly or use delegated fallback
     function openAwayOverlay(){
-      if(!away) return;
-      away.style.display='flex';
-      away.setAttribute('aria-hidden','false');
+      const awayEl = document.getElementById('awayOverlay');
+      if(!awayEl) return;
+      awayEl.style.display='flex';
+      awayEl.setAttribute('aria-hidden','false');
       // mark controlling buttons as expanded
       const primary = document.getElementById('awayBtn'); if(primary) primary.setAttribute('aria-expanded','true');
       const fb = document.getElementById('awayBtnFallback'); if(fb) fb.setAttribute('aria-expanded','true');
-      try{ pinInput.value=''; pinInput.focus(); }catch(e){}
+      try{ const pInput = document.getElementById('pinInput'); if(pInput){ pInput.value=''; pInput.focus(); } }catch(e){}
       if(typeof showToast === 'function') showToast('Privacy enabled', {type:'success'});
     }
     // expose for inline onclick
