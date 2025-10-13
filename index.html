@@ -1885,14 +1885,10 @@
       awayBtnEl.addEventListener('click', openAwayOverlay);
       // diagnostic check: log visibility and hit-test
       try{
+        // silent visibility check (no console output)
         const cs = getComputedStyle(awayBtnEl);
-        console.log('awayBtn found — visible?', cs.display!=='none' && cs.visibility!=='hidden', 'offset', awayBtnEl.offsetWidth, awayBtnEl.offsetHeight);
-        const r = awayBtnEl.getBoundingClientRect();
-        const midX = Math.round(r.left + r.width/2);
-        const midY = Math.round(r.top + r.height/2);
-        const top = document.elementFromPoint(midX, midY);
-        console.log('awayBtn hit-test top element:', top && (top.id || top.className || top.tagName));
-      }catch(e){ console.warn('awayBtn diagnostic failed', e); }
+        void (cs && awayBtnEl.offsetWidth && awayBtnEl.offsetHeight);
+      }catch(e){ /* silent */ }
     } else {
       // fallback: delegate from document in case the button is dynamically replaced
       document.addEventListener('click', (e)=>{ if(e.target && e.target.closest && e.target.closest('#awayBtn')) openAwayOverlay(); });
@@ -1925,7 +1921,6 @@
           // insert at start of top-actions so it's easy to find
           topActions.insertBefore(fb, topActions.firstChild);
           fb.addEventListener('click', openAwayOverlay);
-          console.log('awayBtnFallback created');
         }
       }catch(e){ console.warn('ensureAwayBtnFallback failed', e); }
     })();
