@@ -699,6 +699,38 @@
           ]),
           el('div',{class:'hint',html:'Export a JSON backup of your entire app data. Import will merge keys into localStorage (existing keys are overwritten).'}),
         ])
+      ,
+      el('div',{style:'height:12px'}),
+      el('div',{class:'card pad'},[
+        el('div',{class:'section-title',html:'Theme & Presets'}),
+        el('div',{style:'display:grid;grid-template-columns:1fr 240px;gap:12px;align-items:start'},[
+          el('div',{},[
+            el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px'},[
+              el('label',{style:'width:120px'},[document.createTextNode('Primary Color')]), el('input',{type:'color',id:'themePrimary',value:'#01FABF'}),
+              el('label',{style:'width:120px;margin-left:12px'},[document.createTextNode('Background')]), el('input',{type:'color',id:'themeBg',value:'#f6f8fb'})
+            ]),
+            el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px'},[
+              el('label',{style:'width:120px'},[document.createTextNode('Surface')]), el('input',{type:'color',id:'themeSurface',value:'#ffffff'}),
+              el('label',{style:'width:120px;margin-left:12px'},[document.createTextNode('Ink')]), el('input',{type:'color',id:'themeInk',value:'#0f172a'})
+            ]),
+            el('div',{style:'display:flex;gap:8px;align-items:center'},[
+              el('label',{style:'width:120px'},[document.createTextNode('Radius px')]), el('input',{type:'number',id:'themeRadius',value:14,style:'width:80px'}),
+              el('label',{style:'width:120px;margin-left:12px'},[document.createTextNode('Shadow')]), el('select',{id:'themeShadow'},[ el('option',{value:'sm',html:'Small'}), el('option',{value:'md',html:'Medium'}) ])
+            ]),
+            el('div',{style:'height:8px'}),
+            el('div',{class:'row',style:'justify-content:flex-start;gap:8px'},[
+              el('button',{class:'chip',onclick:applyThemeFromInputs},[document.createTextNode('Apply')]),
+              el('button',{class:'chip',onclick:saveThemePreset},[document.createTextNode('Save Preset')]),
+              el('button',{class:'chip',onclick:exportThemePresets},[document.createTextNode('Export Presets')]),
+              el('label',{class:'chip',style:'cursor:pointer'},[ el('input',{type:'file',id:'importThemePresets',accept:'.json',style:'display:none'}), document.createTextNode('Import Presets') ])
+            ])
+          ]),
+          el('div',{},[
+            el('div',{class:'section-title',html:'Saved Presets'}),
+            el('div',{id:'presetsList',style:'display:flex;flex-direction:column;gap:8px;margin-top:8px',html:''})
+          ])
+        ])
+      ])
       ]);
       view.append(wrap);
 
@@ -751,6 +783,33 @@
         ]));
         openModal('Tag Manager', modalBody, ()=>{ return true; }, 'Close');
       }
+        // Theme helpers
+        function getThemeInputs(){ return {
+          primary: (document.getElementById('themePrimary')||{}).value || '#01FABF',
+          bg: (document.getElementById('themeBg')||{}).value || '#f6f8fb',
+          surface: (document.getElementById('themeSurface')||{}).value || '#ffffff',
+          ink: (document.getElementById('themeInk')||{}).value || '#0f172a',
+          radius: Number((document.getElementById('themeRadius')||{}).value) || 14,
+          shadow: (document.getElementById('themeShadow')||{}).value || 'sm'
+        }; }
+        function applyTheme(theme){
+          try{
+            document.documentElement.style.setProperty('--brand', theme.primary || '#01FABF');
+            document.documentElement.style.setProperty('--bg', theme.bg || '#f6f8fb');
+            document.documentElement.style.setProperty('--surface', (theme.surface||'#ffffff'));
+            document.documentElement.style.setProperty('--ink', theme.ink || '#0f172a');
+            document.documentElement.style.setProperty('--radius', (theme.radius||14)+'px');
+            if(theme.shadow === 'md') document.documentElement.style.setProperty('--shadow-sm','0 10px 30px rgba(2,6,23,.08)');
+            else document.documentElement.style.setProperty('--shadow-sm','0 4px 14px rgba(2,6,23,.06)');
+            showToast('Applied theme');
+          }catch(e){ showToast('Apply theme failed'); }
+        }
+        function applyThemeFromInputs(){ applyTheme(getThemeInputs()); }
+        function saveThemePreset(){ const cfg = loadSettings(); cfg.presets = cfg.presets||[]; const t = getThemeInputs(); const name = prompt('Preset name'); if(!name) return; cfg.presets.push({ name, theme:t }); saveSettings(cfg); renderPresets(); }
+        function renderPresets(){ const wrap = document.getElementById('presetsList'); if(!wrap) return; wrap.innerHTML=''; const cfg = loadSettings(); (cfg.presets||[]).forEach((p,i)=>{ const row = el('div',{style:'display:flex;gap:8px;align-items:center'},[ el('div',{style:'flex:1'},[document.createTextNode(p.name)]), el('button',{class:'chip',onclick:()=>{ applyTheme(p.theme); }},[document.createTextNode('Apply')]), el('button',{class:'chip',onclick:()=>{ if(confirm('Delete preset?')){ cfg.presets.splice(i,1); saveSettings(cfg); renderPresets(); } }},[document.createTextNode('Delete')]) ]); wrap.append(row); }); }
+        function exportThemePresets(){ const cfg = loadSettings(); const blob = new Blob([JSON.stringify(cfg.presets||[], null, 2)],{type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='elite-hq-theme-presets.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); showToast('Exported presets'); }
+        document.addEventListener('change', (e)=>{ if(e.target && e.target.id==='importThemePresets'){ const f = e.target.files && e.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = ()=>{ try{ const parsed = JSON.parse(r.result); const cfg = loadSettings(); cfg.presets = (cfg.presets||[]).concat(parsed); saveSettings(cfg); renderPresets(); showToast('Imported presets'); }catch(err){ showToast('Invalid presets file'); } }; r.readAsText(f); } });
+        renderPresets();
     }
     function route(){
       const hash = location.hash.replace('#/','') || 'dashboard';
