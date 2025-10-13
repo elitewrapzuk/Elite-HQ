@@ -273,8 +273,13 @@
         <div class="logo-mark" id="logoMark"><span>EW</span><img id="logoMarkImg" alt=""></div>
         <div class="logo-title">Elite HQ</div>
       </div>
-      <nav class="nav" id="nav" aria-label="Primary">
-        <!-- sidebar items rendered by JS to support reordering -->
+      <nav class="nav" id="nav">
+  <a href="#/dashboard" data-route="dashboard" class="active"><span class="ico" data-ico="home"></span>Dashboard</a>
+  <a href="#/contacts" data-route="contacts"><span class="ico" data-ico="user"></span>Contacts</a>
+  <a href="#/projects" data-route="projects"><span class="ico" data-ico="folder"></span>Projects</a>
+  <a href="#/calendar" data-route="calendar"><span class="ico" data-ico="calendar"></span>Calendar</a>
+  <a href="#/suppliers" data-route="suppliers"><span class="ico" data-ico="shield"></span>Suppliers</a>
+  <a href="#/email" data-route="email"><span class="ico" data-ico="mail"></span>Email</a>
       </nav>
     </aside>
 
@@ -407,104 +412,6 @@
       document.querySelectorAll('[data-ico]').forEach(n=> n.innerHTML = renderIcon(n.dataset.ico));
     }
 
-    /* ---------- NAV RENDER + DRAG-REORDER ---------- */
-    function renderNav(){
-      const nav = document.getElementById('nav');
-      nav.innerHTML = '';
-      // Ensure links exist in db.links
-      db.links.forEach(link=>{
-        const a = document.createElement('a');
-        a.href = `#/` + (link.route || link.title.toLowerCase());
-        a.dataset.route = link.route || (link.title.toLowerCase());
-        a.draggable = true;
-        a.className = (location.hash.replace('#/','') || 'dashboard') === (a.dataset.route) ? 'active' : '';
-        a.innerHTML = `<span class="ico">${renderIcon(link.icon||'link')}</span>${link.title}`;
-        a.addEventListener('click', (e)=>{ e.preventDefault(); location.hash = `#/` + a.dataset.route; });
-        // drag handlers
-        a.addEventListener('dragstart', (ev)=>{ ev.dataTransfer.setData('text/plain', link.id); a.classList.add('dragging'); });
-        a.addEventListener('dragend', ()=>{ a.classList.remove('dragging'); });
-        a.addEventListener('dragover', (ev)=>{ ev.preventDefault(); a.classList.add('drag-over'); });
-        a.addEventListener('dragleave', ()=>{ a.classList.remove('drag-over'); });
-        a.addEventListener('drop', (ev)=>{
-          ev.preventDefault(); a.classList.remove('drag-over');
-          const draggedId = ev.dataTransfer.getData('text/plain');
-          if(!draggedId || draggedId===link.id) return;
-          const fromIdx = db.links.findIndex(x=>x.id===draggedId);
-          const toIdx = db.links.findIndex(x=>x.id===link.id);
-          if(fromIdx<0||toIdx<0) return;
-          const [item] = db.links.splice(fromIdx,1);
-          db.links.splice(toIdx,0,item);
-          persist(); renderNav(); hydrateInlineIcons(); route();
-        });
-        nav.appendChild(a);
-      });
-      // add an affordance to open nav editor
-      const manage = document.createElement('div');
-      manage.style.marginTop='8px';
-      manage.innerHTML = `<button class="chip" id="editNavBtn">Edit Tabs</button>`;
-      nav.appendChild(manage);
-      document.getElementById('editNavBtn').addEventListener('click', openNavEditor);
-    }
-
-    function openNavEditor(){
-      // simple modal to add/remove tabs
-      const mb = document.getElementById('modalBackdrop'); mb.style.display='flex'; mb.innerHTML='';
-      const modal = document.createElement('div'); modal.className='modal';
-      modal.innerHTML = `<header><h3>Manage Tabs</h3><div><button class="btn" id="closeNavEditor">Close</button></div></header><div class="body"><div id="navEditorList" style="display:grid;gap:8px"></div><div style="height:8px"></div><div style="display:flex;gap:8px"><input class="input" id="newTabName" placeholder="Tab name"><input class="input" id="newTabIcon" placeholder="icon key (mail, calendar...)" style="width:160px"><button class="btn primary" id="addTabBtn">Add Tab</button></div></div><div class="footer"><button class="btn" id="saveNavBtn">Save</button></div>`;
-      mb.appendChild(modal);
-      function renderList(){
-        const list = document.getElementById('navEditorList'); list.innerHTML='';
-        db.links.forEach(li=>{
-          const row = document.createElement('div'); row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px';
-          row.innerHTML = `<div style="flex:1">${renderIcon(li.icon||'link')} <strong>${li.title}</strong></div><div style="display:flex;gap:6px"><button class="chip" data-id="${li.id}" data-act="edit">Edit</button><button class="chip" data-id="${li.id}" data-act="del">Delete</button></div>`;
-          list.appendChild(row);
-        });
-      }
-      renderList();
-      mb.querySelector('#closeNavEditor').addEventListener('click', ()=>{ mb.style.display='none'; mb.innerHTML=''; });
-      mb.querySelector('#addTabBtn').addEventListener('click', ()=>{
-        const name = document.getElementById('newTabName').value.trim(); const icon = document.getElementById('newTabIcon').value.trim()||'link';
-        if(!name) return; db.links.push({ id: crypto.randomUUID(), title: name, icon, route: name.toLowerCase().replace(/[^a-z0-9]+/g,'') }); persist(); renderList(); renderNav(); hydrateInlineIcons();
-      });
-      mb.addEventListener('click', (e)=>{ if(e.target===mb) { mb.style.display='none'; mb.innerHTML=''; } });
-      mb.addEventListener('click', (e)=>{
-        const b = e.target.closest('button[data-act]'); if(!b) return;
-        const id = b.dataset.id; const act = b.dataset.act;
-        if(act==='del'){ if(confirm('Remove tab?')){ db.links = db.links.filter(x=>x.id!==id); persist(); renderList(); renderNav(); hydrateInlineIcons(); } }
-        if(act==='edit'){ const li = db.links.find(x=>x.id===id); if(!li) return; const newTitle = prompt('Tab title', li.title); const newIcon = prompt('Icon key', li.icon||'link'); if(newTitle!=null){ li.title = newTitle; li.icon = newIcon||li.icon; persist(); renderList(); renderNav(); hydrateInlineIcons(); } }
-      });
-    }
-
-    /* ---------- EMAIL TEMPLATES: persistence + manager modal ---------- */
-    const TPL_KEY = 'ew_email_templates';
-    function loadTemplates(){ return Store.get(TPL_KEY, EMAIL_TEMPLATES.slice()); }
-    function saveTemplates(arr){ Store.set(TPL_KEY, arr); }
-
-    function openTemplateManager(){
-      const mb = document.getElementById('modalBackdrop'); mb.style.display='flex'; mb.innerHTML='';
-      const modal = document.createElement('div'); modal.className='modal wide';
-      modal.innerHTML = `<header><h3>Manage Email Templates</h3><div><button class="btn" id="closeTpl">Close</button></div></header><div class="body"><div id="tplList" style="display:grid;gap:8px"></div><div style="height:8px"></div><div class="grid-2"><input class="input" id="tplName" placeholder="Template name"><input class="input" id="tplSubject" placeholder="Subject"></div><textarea class="input" id="tplBody" rows="6" placeholder="Body"></textarea></div><div class="footer"><button class="btn" id="addTplBtn">Add Template</button><button class="btn primary" id="saveTplBtn">Done</button></div>`;
-      mb.appendChild(modal);
-      const tplList = modal.querySelector('#tplList');
-      function refresh(){ tplList.innerHTML=''; loadTemplates().forEach((t,i)=>{
-        const row = document.createElement('div'); row.className='card pad'; row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center';
-        row.innerHTML = `<div><strong>${t.name}</strong><div class="muted" style="font-size:12px">${t.subject}</div></div><div style="display:flex;gap:8px"><button class="chip" data-i="${i}" data-act="edit">Edit</button><button class="chip" data-i="${i}" data-act="del">Delete</button></div>`;
-        tplList.appendChild(row);
-      }); }
-      refresh();
-      modal.querySelector('#closeTpl').addEventListener('click', ()=>{ mb.style.display='none'; mb.innerHTML=''; });
-      modal.querySelector('#addTplBtn').addEventListener('click', ()=>{
-        const name = modal.querySelector('#tplName').value.trim(); const subj = modal.querySelector('#tplSubject').value.trim(); const body = modal.querySelector('#tplBody').value;
-        if(!name) return alert('Name required');
-        const tpls = loadTemplates(); tpls.push({ name, subject: subj, body }); saveTemplates(tpls); refresh(); renderEmail();
-        modal.querySelector('#tplName').value=''; modal.querySelector('#tplSubject').value=''; modal.querySelector('#tplBody').value='';
-      });
-      modal.addEventListener('click', (e)=>{ const b = e.target.closest('button[data-act]'); if(!b) return; const idx = +b.dataset.i; const act = b.dataset.act; const tpls = loadTemplates(); if(act==='del'){ if(confirm('Delete template?')){ tpls.splice(idx,1); saveTemplates(tpls); refresh(); renderEmail(); } } if(act==='edit'){ const t = tpls[idx]; const name = prompt('Name', t.name); if(name==null) return; const subj = prompt('Subject', t.subject); if(subj==null) return; const body = prompt('Body', t.body); if(body==null) return; tpls[idx] = { name, subject: subj, body }; saveTemplates(tpls); refresh(); renderEmail(); } });
-      modal.querySelector('#saveTplBtn').addEventListener('click', ()=>{ mb.style.display='none'; mb.innerHTML=''; });
-      mb.addEventListener('click',(e)=>{ if(e.target===mb){ mb.style.display='none'; mb.innerHTML=''; } });
-    }
-
-
     /************ Utilities ************/
     const $ = (sel,root=document)=>root.querySelector(sel);
     const $$ = (sel,root=document)=>[...root.querySelectorAll(sel)];
@@ -587,7 +494,6 @@
     function renderEmail() {
       const view = document.getElementById('view');
       view.innerHTML = '';
-      const templates = loadTemplates();
       const container = document.createElement('div');
       container.className = 'card pad';
       container.innerHTML = `
@@ -598,9 +504,9 @@
             <label>Subject:<input class="input" id="emailSubject" type="text" placeholder="Subject"></label><br>
             <label>Template:
               <select class="input" id="emailTemplate">
-                ${templates.map((t,i)=>`<option value="${i}">${t.name}</option>`).join('')}
+                ${EMAIL_TEMPLATES.map((t,i)=>`<option value="${i}">${t.name}</option>`).join('')}
               </select>
-            </label> <button class="chip" id="manageTemplatesBtn">Manage Templates</button><br>
+            </label><br>
             <label>Body:<textarea class="input" id="emailBody" rows="8" placeholder="Write your email..."></textarea></label><br>
             <label>Attachments:<input class="input" id="emailFiles" type="file" multiple></label><br>
             <button class="btn primary" id="sendEmailBtn">Send Email</button>
@@ -608,7 +514,7 @@
           <div style="flex:1;min-width:220px">
             <div class="section-title">Templates</div>
             <ul id="templateList" style="list-style:none;padding:0;margin:0;">
-              ${templates.map((t,i)=>`<li><button class="chip" data-tpl="${i}">${t.name}</button></li>`).join('')}
+              ${EMAIL_TEMPLATES.map((t,i)=>`<li><button class="chip" data-tpl="${i}">${t.name}</button></li>`).join('')}
             </ul>
           </div>
         </div>
@@ -621,19 +527,18 @@
       const subjectEl = document.getElementById('emailSubject');
       const bodyEl = document.getElementById('emailBody');
       templateSel.addEventListener('change', e => {
-        const t = loadTemplates()[+e.target.value];
+        const t = EMAIL_TEMPLATES[+e.target.value];
         subjectEl.value = t.subject;
         bodyEl.value = t.body;
       });
       document.getElementById('templateList').addEventListener('click', e => {
         if(e.target.matches('button[data-tpl]')){
-          const t = loadTemplates()[+e.target.dataset.tpl];
+          const t = EMAIL_TEMPLATES[+e.target.dataset.tpl];
           subjectEl.value = t.subject;
           bodyEl.value = t.body;
           templateSel.value = e.target.dataset.tpl;
         }
       });
-      document.getElementById('manageTemplatesBtn').addEventListener('click', openTemplateManager);
 
       // Send email (calls Google Apps Script endpoint)
       document.getElementById('sendEmailBtn').addEventListener('click', async () => {
@@ -1514,12 +1419,9 @@
     })();
 
     /************ Nav/Menu + Init ************/
-  document.getElementById('menuBtn')?.addEventListener('click',()=>document.getElementById('sidebar').classList.toggle('open'));
-  // ensure links array exists
-  db.links = db.links || [];
-  renderNav();
-  route();           // render initial view
-  hydrateInlineIcons(); // ensure topbar/sidebar icons render on first load
+    document.getElementById('menuBtn')?.addEventListener('click',()=>document.getElementById('sidebar').classList.toggle('open'));
+    route();           // render initial view
+    hydrateInlineIcons(); // ensure topbar/sidebar icons render on first load
 
     /************ Accessibility niceties ************/
     pinInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ tryUnlock(); }});
