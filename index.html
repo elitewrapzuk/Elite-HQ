@@ -1485,6 +1485,17 @@
       }
     })();
 
+    // Broad delegated listener: if a click occurs on any topbar button that looks like the Privacy control, open overlay.
+    document.addEventListener('click', (e)=>{
+      try{
+        const el = e.target && e.target.closest && e.target.closest('.top-actions .icon-btn, .top-actions button');
+        if(!el) return;
+        const txt = (el.textContent||'').trim().toLowerCase();
+        const hasShield = !!el.querySelector('.ico[data-ico="shield"]') || !!el.querySelector('svg path[d*="M12 2l8 4v6"]');
+        if(txt.includes('privacy') || hasShield){ openAwayOverlay(); e.preventDefault(); }
+      }catch(err){ /* silent */ }
+    }, {capture:false});
+
     /************ Modals ************/
     function openModal(title, bodyNode, onSubmit, submitText='Save', opts={}){
       const bd = $('#modalBackdrop'); bd.innerHTML='';
