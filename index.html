@@ -1907,6 +1907,29 @@
     // clicking backdrop/outside the panel closes overlay
     if(away){ away.addEventListener('click', (e)=>{ if(e.target === away) { away.style.display='none'; } }); }
 
+    // Ensure there's always a clickable away button on desktop: create a fallback if original is missing/hidden
+    (function ensureAwayBtnFallback(){
+      try{
+        const topActions = document.querySelector('.top-actions'); if(!topActions) return;
+        const primary = document.getElementById('awayBtn');
+        let need = false;
+        if(!primary) need = true;
+        else{
+          const cs = getComputedStyle(primary);
+          if(cs.display==='none' || cs.visibility==='hidden' || primary.offsetWidth===0 || primary.offsetHeight===0) need = true;
+        }
+        if(need && !document.getElementById('awayBtnFallback')){
+          const fb = document.createElement('button');
+          fb.className = 'icon-btn'; fb.id = 'awayBtnFallback'; fb.title='Away Mode';
+          fb.innerHTML = '<span class="ico" data-ico="shield"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-4 8-8 10-4-2-8-5-8-10V6z"></path></svg></span><span>Privacy</span>';
+          // insert at start of top-actions so it's easy to find
+          topActions.insertBefore(fb, topActions.firstChild);
+          fb.addEventListener('click', openAwayOverlay);
+          console.log('awayBtnFallback created');
+        }
+      }catch(e){ console.warn('ensureAwayBtnFallback failed', e); }
+    })();
+
     function tryUnlock(){
       if(pinInput.value.length===6){
         if(pinInput.value===PIN){
