@@ -264,6 +264,20 @@
     }
   @media (max-width:700px){ .icon-grid{grid-template-columns:repeat(4,1fr)} }
 
+    /* Mobile touch targets and small-screen adjustments */
+    @media (max-width:980px){
+      .icon-btn, .btn, .chip { min-height:44px; padding:10px 12px; }
+      .nav a { padding:12px; border-radius:12px; }
+      .top-actions { gap:6px; }
+      .keypad button { height:56px; font-size:18px; }
+    }
+    @media (max-width:480px){
+      /* hide less important info to save space on very small devices */
+      #autosaveIndicator{display:none}
+      .top-actions .divider{display:none}
+      .page-title{display:none}
+    }
+
     /* KEYFRAMES */
     @keyframes fade{from{opacity:0}to{opacity:1}}
 
@@ -1205,12 +1219,27 @@
       const menuBtn = document.getElementById('menuBtn');
       const sidebar = document.getElementById('sidebar');
       const closeMobileBtn = document.getElementById('closeMobileBtn');
-      if(menuBtn && sidebar){ menuBtn.addEventListener('click', ()=> sidebar.classList.toggle('open')); }
-      if(closeMobileBtn && sidebar){ closeMobileBtn.addEventListener('click', ()=> sidebar.classList.remove('open')); }
-    });
+      if(menuBtn){
+        menuBtn.setAttribute('aria-controls','sidebar');
+        menuBtn.setAttribute('aria-expanded','false');
+      }
+      if(menuBtn && sidebar){
+        menuBtn.addEventListener('click', ()=>{
+          const opened = sidebar.classList.toggle('open');
+          menuBtn.setAttribute('aria-expanded', String(!!opened));
+        });
+      }
+      if(closeMobileBtn && sidebar){ closeMobileBtn.addEventListener('click', ()=> { sidebar.classList.remove('open'); menuBtn && menuBtn.setAttribute('aria-expanded','false'); }); }
 
-    // ensure clicking a nav link closes sidebar on mobile
-    $$('#nav a').forEach(a=> a.addEventListener('click', ()=>{ if(window.innerWidth <= 980) sidebar.classList.remove('open'); }));
+      // ensure clicking a nav link closes sidebar on mobile (guarded)
+      $$('#nav a').forEach(a=> a.addEventListener('click', ()=>{ const sb = document.getElementById('sidebar'); if(sb && window.innerWidth <= 980) { sb.classList.remove('open'); menuBtn && menuBtn.setAttribute('aria-expanded','false'); } }));
+
+      // when resizing to desktop widths, ensure mobile sidebar is closed
+      window.addEventListener('resize', ()=>{
+        const sb = document.getElementById('sidebar');
+        if(window.innerWidth > 980 && sb && sb.classList.contains('open')){ sb.classList.remove('open'); document.getElementById('menuBtn')?.setAttribute('aria-expanded','false'); }
+      });
+    });
 
     /************ Email templates CRUD (localStorage) ************/
     function loadTemplates(){ return Store.get(TEMPLATES_KEY, EMAIL_TEMPLATES); }
