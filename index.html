@@ -247,6 +247,8 @@
     @keyframes shake{10%, 90% { transform: translateX(-2px); }20%, 80% { transform: translateX(4px); }30%, 50%, 70% { transform: translateX(-6px); }40%, 60% { transform: translateX(6px); }}
 
     /* RESPONSIVE */
+    /* hide menu by default, allow responsive rule to override on small screens */
+    .menu{display:none}
     @media (max-width:980px){
       .app{grid-template-columns:1fr}
       .sidebar{position:fixed;transform:translateX(-100%);z-index:60;width:260px}
@@ -255,8 +257,7 @@
       .stats{grid-template-columns:1fr 1fr}
       .icon-grid{grid-template-columns:repeat(5,1fr)}
     }
-    @media (max-width:700px){ .icon-grid{grid-template-columns:repeat(4,1fr)} }
-    .menu{display:none}
+  @media (max-width:700px){ .icon-grid{grid-template-columns:repeat(4,1fr)} }
 
     /* KEYFRAMES */
     @keyframes fade{from{opacity:0}to{opacity:1}}
