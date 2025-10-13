@@ -310,6 +310,8 @@
           <!-- Removed topbar logo as requested -->
           <!-- Upload moved to Settings page -->
           <button class="icon-btn" id="awayBtn" title="Away Mode"><span class="ico" data-ico="shield"></span><span>Privacy</span></button>
+          <!-- Autosave indicator -->
+          <div id="autosaveIndicator" class="muted" style="font-size:13px;padding:0 8px;display:flex;align-items:center;gap:8px">Autosave: <span id="autosaveState">—</span></div>
           <div class="divider"></div>
           <div class="switch" id="modeSwitch" role="switch" aria-checked="false" tabindex="0" title="Toggle theme">
             <div class="knob"></div>
@@ -606,6 +608,49 @@
     function loadSettings(){ return Store.get(SETTINGS_KEY, { tags: [], logoDataUrl: null, other: {} }); }
     function saveSettings(s){ Store.set(SETTINGS_KEY, s); }
 
+    /* Data export/import helpers */
+    function exportAll(){
+      try{
+        const data = {};
+        for(let i=0;i<localStorage.length;i++){ const k = localStorage.key(i); data[k]=localStorage.getItem(k); }
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = 'elite-hq-backup-'+(new Date()).toISOString().slice(0,19).replace(/[:T]/g,'-')+'.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        showToast('Exported data');
+      }catch(e){ showToast('Export failed'); }
+    }
+
+    function importAllFromFile(file){
+      if(!file) return showToast('No file selected');
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        try{
+          const parsed = JSON.parse(reader.result);
+          // merge into localStorage (overwrite existing keys)
+          Object.keys(parsed).forEach(k=>{ try{ localStorage.setItem(k, parsed[k]); }catch(e){} });
+          showToast('Import complete — refreshing view');
+          // rehydrate app state
+          setTimeout(()=> location.reload(), 750);
+        }catch(e){ showToast('Invalid JSON file'); }
+      };
+      reader.readAsText(file);
+    }
+
+    // Attach import file handler (if importFile element exists later when settings rendered)
+    document.addEventListener('change', (e)=>{
+      if(e.target && e.target.id === 'importFile'){
+        const f = e.target.files && e.target.files[0]; if(f) importAllFromFile(f);
+      }
+    });
+
+    /* Autosave signalling (visual indicator) */
+    function setAutosaveState(text){ const el = document.getElementById('autosaveState'); if(!el) return; el.textContent = text; }
+    // Monkey-patch Store.set to signal autosave (non-destructive)
+    if(window.Store && typeof Store.set === 'function'){
+      const _origSet = Store.set.bind(Store);
+      Store.set = function(k,v){ _origSet(k,v); try{ setAutosaveState('Saved'); setTimeout(()=> setAutosaveState('—'), 1200); }catch(e){} };
+    }
+
     function renderSettings(){
       const view = document.getElementById('view'); view.innerHTML = '';
       const cfg = loadSettings();
@@ -626,6 +671,16 @@
           el('div',{id:'tagsWrap',style:'display:flex;gap:8px;flex-wrap:wrap'}),
           el('div',{style:'height:8px'}),
           el('div',{class:'hint',html:'Tags help you categorize contacts, projects and suppliers.'})
+        ])
+        ,
+        el('div',{style:'height:12px'}),
+        el('div',{class:'card pad'},[
+          el('div',{class:'section-title',html:'Data — Export / Import'}),
+          el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px'},[
+            el('button',{class:'chip',onclick:exportAll},[document.createTextNode('Export data')]),
+            el('label',{class:'chip',style:'cursor:pointer'},[ el('input',{type:'file',id:'importFile',accept:'.json',style:'display:none'}), document.createTextNode('Import data') ])
+          ]),
+          el('div',{class:'hint',html:'Export a JSON backup of your entire app data. Import will merge keys into localStorage (existing keys are overwritten).'}),
         ])
       ]);
       view.append(wrap);
