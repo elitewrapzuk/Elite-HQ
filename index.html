@@ -654,6 +654,8 @@
     function renderSettings(){
       const view = document.getElementById('view'); view.innerHTML = '';
       const cfg = loadSettings();
+      // normalize tags to objects {name,color} for newer UX
+      cfg.tags = (cfg.tags||[]).map(t => (typeof t === 'string') ? { name: t, color: '#01FABF' } : (t.name? t : { name: String(t), color: '#01FABF' }));
       const wrap = el('div',{},[
         el('div',{class:'card pad'},[
           el('div',{class:'section-title',html:'Branding & Logo'}),
@@ -666,9 +668,9 @@
         el('div',{class:'card pad'},[
           el('div',{class:'section-title',html:'Tags & Metadata'}),
           el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px'},[
-            el('input',{id:'newTag',class:'input',placeholder:'Add tag and press Enter'}), el('button',{class:'chip',onclick:addTag},[document.createTextNode('Add')])
-          ]),
-          el('div',{id:'tagsWrap',style:'display:flex;gap:8px;flex-wrap:wrap'}),
+              el('input',{id:'newTag',class:'input',placeholder:'Add tag and press Enter'}), el('input',{type:'color',id:'newTagColor',value:'#01FABF',style:'width:44px;height:36px;padding:4px;border-radius:8px;border:1px solid var(--line)'}), el('button',{class:'chip',onclick:addTag},[document.createTextNode('Add')]), el('button',{class:'chip',onclick:openTagManager,style:'margin-left:8px'},[document.createTextNode('Manage tags')])
+            ]),
+            el('div',{id:'tagsWrap',style:'display:flex;gap:8px;flex-wrap:wrap'}),
           el('div',{style:'height:8px'}),
           el('div',{class:'hint',html:'Tags help you categorize contacts, projects and suppliers.'})
         ])
@@ -687,7 +689,7 @@
 
       const logoFile = document.getElementById('logoFile');
       const settingsLogoImg = document.getElementById('settingsLogoImg');
-      function showLogo(dataUrl){ settingsLogoImg.style.display = dataUrl ? 'block' : 'none'; settingsLogoImg.src = dataUrl || ''; }
+  function showLogo(dataUrl){ settingsLogoImg.style.display = dataUrl ? 'block' : 'none'; settingsLogoImg.src = dataUrl || ''; }
       showLogo(cfg.logoDataUrl);
       logoFile.addEventListener('change', async (e)=>{
         const f = e.target.files && e.target.files[0]; if(!f) return;
@@ -699,11 +701,37 @@
         }; reader.readAsDataURL(f);
       });
 
-      // tags
-      function renderTags(){ const wrap = document.getElementById('tagsWrap'); wrap.innerHTML=''; cfg.tags.forEach((t,i)=>{ const pill = el('div',{class:'chip',style:'display:inline-flex;align-items:center;gap:8px'},[ document.createTextNode(t), el('button',{class:'chip',onclick:()=>{ cfg.tags.splice(i,1); saveSettings(cfg); renderTags(); }},[document.createTextNode('x')]) ]); wrap.append(pill); }); }
-      function addTag(){ const v = (document.getElementById('newTag').value||'').trim(); if(!v) return; if(!cfg.tags.includes(v)){ cfg.tags.push(v); saveSettings(cfg); renderTags(); document.getElementById('newTag').value=''; } }
-      document.getElementById('newTag').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); addTag(); } });
-      renderTags();
+  // tags (now objects with name + color)
+  function renderTags(){ const wrap = document.getElementById('tagsWrap'); wrap.innerHTML=''; (cfg.tags||[]).forEach((t,i)=>{ const pill = el('div',{class:'chip',style:`display:inline-flex;align-items:center;gap:8px;background:${t.color}22;border-color:${t.color}`},[ el('span',{style:`width:12px;height:12px;border-radius:4px;background:${t.color};display:inline-block;margin-right:6px`}), document.createTextNode(t.name), el('button',{class:'chip',onclick:()=>{ cfg.tags.splice(i,1); saveSettings(cfg); renderTags(); }},[document.createTextNode('x')]) ]); wrap.append(pill); }); }
+  function addTag(){ const v = (document.getElementById('newTag').value||'').trim(); const color = (document.getElementById('newTagColor')||{}).value||'#01FABF'; if(!v) return; if(!(cfg.tags||[]).some(x=>x.name.toLowerCase()===v.toLowerCase())){ (cfg.tags = cfg.tags||[]).push({name:v, color}); saveSettings(cfg); renderTags(); document.getElementById('newTag').value=''; } }
+  document.getElementById('newTag').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); addTag(); } });
+  renderTags();
+
+      // Tag Manager modal — bulk operations
+      function openTagManager(){
+        const modalBody = el('div',{},[]);
+        const list = el('div',{},[]);
+        function refreshList(){ list.innerHTML=''; (cfg.tags||[]).forEach((t,i)=>{
+          const row = el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px'},[
+            el('input',{value:t.name,class:'input',style:'flex:1'}),
+            el('input',{type:'color',value:t.color,style:'width:44px;height:36px;padding:4px;border-radius:8px;border:1px solid var(--line)'}),
+            el('button',{class:'chip',onclick:()=>{ cfg.tags.splice(i,1); saveSettings(cfg); refreshList(); renderTags(); }},[document.createTextNode('Delete')])
+          ]);
+          // wire inline edits
+          row.querySelectorAll('input')[0].addEventListener('input', (e)=>{ cfg.tags[i].name = e.target.value; saveSettings(cfg); renderTags(); });
+          row.querySelectorAll('input')[1].addEventListener('input', (e)=>{ cfg.tags[i].color = e.target.value; saveSettings(cfg); renderTags(); });
+          list.append(row);
+        }); }
+        refreshList();
+        modalBody.append(list, el('div',{style:'height:8px'}), el('div',{class:'row',style:'justify-content:flex-end;gap:8px'},[
+          el('button',{class:'chip',onclick:()=>{ // reorder: simple alphabetic
+            cfg.tags.sort((a,b)=>a.name.localeCompare(b.name)); saveSettings(cfg); refreshList(); renderTags();
+          }},[document.createTextNode('Sort A–Z')]),
+          el('button',{class:'chip',onclick:()=>{ // merge duplicates
+            const map = {}; cfg.tags.forEach(t=>{ map[t.name.toLowerCase()] = map[t.name.toLowerCase()] || t; }); cfg.tags = Object.values(map); saveSettings(cfg); refreshList(); renderTags(); }},[document.createTextNode('Merge duplicates')])
+        ]));
+        openModal('Tag Manager', modalBody, ()=>{ return true; }, 'Close');
+      }
     }
     function route(){
       const hash = location.hash.replace('#/','') || 'dashboard';
@@ -1422,6 +1450,7 @@
         formField('Name *', nameIn),
         formField('Company', companyIn),
         formField('Type', typeSel),
+        formField('Tags', el('div',{id:'contactTagWrap',style:'display:flex;gap:8px;flex-wrap:wrap'},[])),
         formField('Phone', phoneIn),
         formField('Email', emailIn),
       ]);
@@ -1431,12 +1460,25 @@
           name: nameIn.value.trim(),
           company: companyIn.value.trim(),
           type: typeSel.value,
+          tags: Array.from(document.querySelectorAll('#contactTagWrap .tag-toggle.selected')).map(n=>n.dataset.tag),
           phone: phoneIn.value.trim(),
           email: emailIn.value.trim()
         };
         if(contact){ Object.assign(contact, payload); } else { db.contacts.push({ id: crypto.randomUUID(), ...payload }); }
         persist(); renderContacts(); return true;
       }, contact?'Save':'Add Contact');
+
+      // render available tags as toggles
+      (function renderContactTagOptions(){
+        const wrap = document.getElementById('contactTagWrap'); if(!wrap) return;
+        wrap.innerHTML='';
+        const settings = loadSettings();
+        (settings.tags||[]).forEach(t=>{
+          const btn = el('button',{class:'chip tag-toggle',dataset:{tag:t.name},onclick:(e)=>{ e.preventDefault(); e.currentTarget.classList.toggle('selected'); }},[document.createTextNode(t.name)]);
+          if(contact && (contact.tags||[]).includes(t.name)) btn.classList.add('selected');
+          wrap.append(btn);
+        });
+      })();
     }
 
     /* Full details modal for a contact (click a card) — wide, two-column, scrollable */
@@ -1468,6 +1510,7 @@
         formField('Name', nameIn),
         formField('Company', companyIn),
         formField('Type', typeSel),
+        formField('Tags', el('div',{id:'viewContactTags',style:'display:flex;gap:8px;flex-wrap:wrap'},[])),
         formField('Phone', phoneIn),
         formField('Email', emailIn),
       ]);
@@ -1482,6 +1525,17 @@
         el('div',{class:'grid-2'},[leftCol, rightCol])
       ]);
 
+      // render existing tags in details view
+      (function renderViewContactTags(){
+        const wrap = document.getElementById('viewContactTags'); if(!wrap) return; wrap.innerHTML='';
+        const settings = loadSettings(); (settings.tags||[]).forEach(t=>{
+          const chip = el('div',{class:'chip',dataset:{tag:t.name},style:`background:${t.color}22;border-color:${t.color}`},[document.createTextNode(t.name)]);
+          if((contact.tags||[]).includes(t.name)) chip.classList.add('selected');
+          chip.addEventListener('click',(e)=>{ e.currentTarget.classList.toggle('selected'); });
+          wrap.append(chip);
+        });
+      })();
+
       openModal('Contact Details', body, ()=>{
         Object.assign(contact, {
           name: nameIn.value.trim(),
@@ -1492,6 +1546,7 @@
           address: addressIn.value.trim(),
           jobRefs: refsIn.value.trim(),
           notes: notesIn.value.trim(),
+          tags: Array.from(document.querySelectorAll('#viewContactTags .chip.selected')).map(n=>n.dataset.tag)
         });
         persist();
         renderContacts();
