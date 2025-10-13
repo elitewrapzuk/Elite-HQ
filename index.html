@@ -257,6 +257,7 @@
     @media (max-width:980px){
       .app{grid-template-columns:1fr}
       .sidebar{position:fixed;transform:translateX(-100%);z-index:60;width:260px}
+      .sidebar{transition:transform .28s ease}
       .sidebar.open{transform:translateX(0)}
       .topbar .menu{display:block}
       .stats{grid-template-columns:1fr 1fr}
@@ -1239,6 +1240,14 @@
         const sb = document.getElementById('sidebar');
         if(window.innerWidth > 980 && sb && sb.classList.contains('open')){ sb.classList.remove('open'); document.getElementById('menuBtn')?.setAttribute('aria-expanded','false'); }
       });
+      // click outside sidebar to close on mobile
+      document.addEventListener('click', (e)=>{
+        const sb = document.getElementById('sidebar'); const btn = document.getElementById('menuBtn');
+        if(!sb) return; if(!sb.classList.contains('open')) return;
+        const withinSidebar = sb.contains(e.target);
+        const withinButton = btn && btn.contains(e.target);
+        if(!withinSidebar && !withinButton && window.innerWidth <= 980){ sb.classList.remove('open'); btn && btn.setAttribute('aria-expanded','false'); }
+      });
     });
 
     /************ Email templates CRUD (localStorage) ************/
@@ -1782,6 +1791,8 @@
       keys.forEach(k=>{
         const b = document.createElement('button');
         b.textContent = k;
+        b.setAttribute('aria-label', k==='←' ? 'Backspace' : (k==='CLR' ? 'Clear' : 'Number '+k));
+        b.style.touchAction = 'manipulation';
         b.addEventListener('click', ()=>{
           if(k==='CLR'){ pinInput.value=''; return; }
           if(k==='←'){ pinInput.value = pinInput.value.slice(0,-1); return; }
