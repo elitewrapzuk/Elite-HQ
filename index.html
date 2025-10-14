@@ -58,6 +58,18 @@
     .nav a.active{background:var(--ink);color:#fff}
     .nav a .ico{width:18px;height:18px;display:inline-block;color:currentColor}
 
+  /* Nav groups (dropdown in sidebar) */
+  .nav-group{border-radius:12px}
+  .nav-group .nav-group-header{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px;border-radius:12px;border:1px solid transparent;background:transparent;color:var(--ink);font-weight:800;font-size:13.5px;cursor:pointer}
+  .nav-group .nav-group-header:hover{background:var(--nav-hover)}
+  .nav-group .nav-group-header .left{display:flex;align-items:center;gap:10px}
+  .nav-group .chev{transition:transform .18s ease;opacity:.7}
+  .nav-group.open .chev{transform:rotate(180deg)}
+  .nav-sub{display:none;flex-direction:column;gap:6px;margin-top:6px;margin-left:4px;padding-left:8px;border-left:1px solid var(--line)}
+  .nav-group.open .nav-sub{display:flex}
+  .nav a.sub{padding-left:28px}
+  .nav a.sub.active{background:var(--ink);color:#fff}
+
     /* TOP BAR (Glass) */
     .main{display:flex;flex-direction:column;min-width:0}
     .topbar{height:58px;backdrop-filter: blur(12px);background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 14px;gap:10px;position:sticky;top:0;z-index:5;transition:background .3s ease,border-color .3s ease;box-shadow:var(--glass-ring)}
@@ -324,8 +336,16 @@
   <a href="#/email" data-route="email"><span class="ico" data-ico="mail"></span>Email</a>
   <a href="#/quote" data-route="quote"><span class="ico" data-ico="doc"></span>New Quote</a>
   <a href="#/optimiser" data-route="optimiser"><span class="ico" data-ico="wrench"></span>Cut Optimiser</a>
-  <a href="#/signatures" data-route="signatures"><span class="ico" data-ico="doc"></span>In-Person Signatures</a>
-  <a href="#/remote-sign" data-route="remote-sign"><span class="ico" data-ico="doc"></span>Remote Signatures</a>
+  <div class="nav-group" data-group="signatures">
+    <button class="nav-group-header" type="button" aria-expanded="false">
+      <span class="left"><span class="ico" data-ico="doc"></span><span>Signatures</span></span>
+      <span class="chev">▾</span>
+    </button>
+    <div class="nav-sub" id="navSignatures">
+      <a href="#/signatures" data-route="signatures" class="sub"><span class="ico" data-ico="doc"></span>In-Person Signatures</a>
+      <a href="#/remote-sign" data-route="remote-sign" class="sub"><span class="ico" data-ico="doc"></span>Remote Signatures</a>
+    </div>
+  </div>
   <a href="#/remote-quote" data-route="remote-quote"><span class="ico" data-ico="doc"></span>Remote Quote Form</a>
       <a href="#/settings" data-route="settings"><span class="ico" data-ico="settings"></span>Settings</a>
       </nav>
@@ -827,6 +847,12 @@
       $('#crumb').textContent = hash[0].toUpperCase()+hash.slice(1);
       routes[hash]();
       hydrateInlineIcons();
+      // Auto-open signatures group if a sub-route is selected
+      const sigGroup = document.querySelector('.nav-group[data-group="signatures"]');
+      if(sigGroup){
+        const isSig = (hash==='signatures' || hash==='remote-sign');
+        if(isSig) sigGroup.classList.add('open');
+      }
     }
 
     // Always show dashboard as default page
@@ -1256,13 +1282,23 @@
       const nav = document.getElementById('nav');
       const saved = loadNavOrder();
       if(!saved || !Array.isArray(saved)) return hydrateInlineIcons();
-      // reorder anchors by saved route list
-      const map = {};
-      $$('#nav a').forEach(a=> map[a.dataset.route]=a);
+      // Only reorder top-level anchors; leave groups and other nodes intact
+      const children = Array.from(nav.children);
+      const topAnchors = children.filter(n => n.tagName && n.tagName.toLowerCase()==='a');
+      if(!topAnchors.length) { hydrateInlineIcons(); return; }
+      const routeIndex = r => { const i = saved.indexOf(r); return i === -1 ? Number.MAX_SAFE_INTEGER : i; };
+      const sortedAnchors = [...topAnchors].sort((a,b)=> routeIndex(a.dataset.route) - routeIndex(b.dataset.route));
+      const finalNodes = [];
+      let ai = 0;
+      for(const child of children){
+        if(child.tagName && child.tagName.toLowerCase()==='a'){
+          finalNodes.push(sortedAnchors[ai++]);
+        } else {
+          finalNodes.push(child);
+        }
+      }
       nav.innerHTML = '';
-      saved.forEach(route => { if(map[route]) nav.append(map[route]); });
-      // append any missing items
-      Object.values(map).forEach(a=>{ if(!nav.querySelector(`[data-route="${a.dataset.route}"]`)) nav.append(a); });
+      finalNodes.forEach(n=> nav.appendChild(n));
       hydrateInlineIcons();
     }
     applyNavOrder();
@@ -1270,18 +1306,18 @@
     function enableNavDrag(){
       const nav = document.getElementById('nav');
       let dragging = null;
-      nav.addEventListener('dragstart', e=>{ if(e.target.matches('a')){ dragging = e.target; e.dataTransfer.effectAllowed='move'; e.target.classList.add('dragging'); } });
+      nav.addEventListener('dragstart', e=>{ if(e.target.matches(':scope > a')){ dragging = e.target; e.dataTransfer.effectAllowed='move'; e.target.classList.add('dragging'); } });
       nav.addEventListener('dragend', e=>{ if(dragging){ dragging.classList.remove('dragging'); dragging=null; } });
-      nav.addEventListener('dragover', e=>{ if(!dragging) return; e.preventDefault(); const over = e.target.closest('a'); if(!over || over===dragging) return; // highlight
+      nav.addEventListener('dragover', e=>{ if(!dragging) return; e.preventDefault(); const over = e.target.closest(':scope > a'); if(!over || over===dragging) return; // highlight
         $$('#nav a').forEach(a=>a.classList.toggle('drop-target', a===over));
       });
       nav.addEventListener('dragleave', e=>{ $$('#nav a').forEach(a=>a.classList.remove('drop-target')); });
-      nav.addEventListener('drop', e=>{ e.preventDefault(); const over = e.target.closest('a'); if(!over || !dragging || over===dragging) return; over.classList.remove('drop-target'); nav.insertBefore(dragging, over.nextSibling); // place after target
+      nav.addEventListener('drop', e=>{ e.preventDefault(); const over = e.target.closest(':scope > a'); if(!over || !dragging || over===dragging) return; over.classList.remove('drop-target'); nav.insertBefore(dragging, over.nextSibling); // place after target
         persistNavOrderFromDOM(); hydrationAfterChange();
       });
 
       // make anchors draggable and accessible
-      $$('#nav a').forEach(a=>{ a.setAttribute('draggable','true'); a.setAttribute('tabindex','0'); a.addEventListener('keydown', navKeyboardHandler); });
+      $$('#nav > a').forEach(a=>{ a.setAttribute('draggable','true'); a.setAttribute('tabindex','0'); a.addEventListener('keydown', navKeyboardHandler); });
     }
 
     function navKeyboardHandler(e){
@@ -1296,7 +1332,7 @@
     }
 
     function persistNavOrderFromDOM(){
-      const order = $$('#nav a').map(a=>a.dataset.route);
+      const order = $$('#nav > a').map(a=>a.dataset.route);
       saveNavOrder(order);
     }
 
@@ -1308,6 +1344,27 @@
 
     // Initialize drag and keyboard handlers
     enableNavDrag();
+
+    // Nav groups: toggle/persist open state
+    const NAV_GROUPS_KEY = 'ew_nav_groups';
+    function loadNavGroups(){ return Store.get(NAV_GROUPS_KEY, {}); }
+    function saveNavGroups(s){ Store.set(NAV_GROUPS_KEY, s); }
+    (function initNavGroups(){
+      const state = loadNavGroups();
+      document.querySelectorAll('.nav-group').forEach(group => {
+        const key = group.dataset.group;
+        if(state[key]) group.classList.add('open');
+        const header = group.querySelector('.nav-group-header');
+        if(header){
+          header.setAttribute('aria-expanded', String(group.classList.contains('open')));
+          header.addEventListener('click', ()=>{
+            group.classList.toggle('open');
+            header.setAttribute('aria-expanded', String(group.classList.contains('open')));
+            const s = loadNavGroups(); s[key] = group.classList.contains('open'); saveNavGroups(s);
+          });
+        }
+      });
+    })();
 
     // Menu open/close for mobile (attach after DOM ready)
     document.addEventListener('DOMContentLoaded', function() {
