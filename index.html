@@ -322,6 +322,11 @@
   <a href="#/calendar" data-route="calendar"><span class="ico" data-ico="calendar"></span>Calendar</a>
   <a href="#/suppliers" data-route="suppliers"><span class="ico" data-ico="shield"></span>Suppliers</a>
   <a href="#/email" data-route="email"><span class="ico" data-ico="mail"></span>Email</a>
+  <a href="#/quote" data-route="quote"><span class="ico" data-ico="doc"></span>New Quote</a>
+  <a href="#/optimiser" data-route="optimiser"><span class="ico" data-ico="wrench"></span>Cut Optimiser</a>
+  <a href="#/signatures" data-route="signatures"><span class="ico" data-ico="doc"></span>In-Person Signatures</a>
+  <a href="#/remote-sign" data-route="remote-sign"><span class="ico" data-ico="doc"></span>Remote Signatures</a>
+  <a href="#/remote-quote" data-route="remote-quote"><span class="ico" data-ico="doc"></span>Remote Quote Form</a>
       <a href="#/settings" data-route="settings"><span class="ico" data-ico="settings"></span>Settings</a>
       </nav>
         <button class="close-mobile" id="closeMobileBtn" aria-label="Close menu">✕</button>
@@ -529,7 +534,39 @@
     }
 
     /************ Router ************/
-  const routes = { dashboard: renderDashboard, contacts: renderContacts, projects: renderProjects, calendar: renderCalendar, suppliers: renderSuppliers, email: renderEmail, settings: renderSettings };
+  const routes = { dashboard: renderDashboard, contacts: renderContacts, projects: renderProjects, calendar: renderCalendar, suppliers: renderSuppliers, email: renderEmail, quote: renderQuote, optimiser: renderOptimiser, signatures: renderSignatures, 'remote-sign': renderRemoteSign, 'remote-quote': renderRemoteQuote, settings: renderSettings };
+
+    // External tool embed helper
+    function embedExternal(url, title){
+      const view = document.getElementById('view');
+      view.innerHTML = '';
+      const frameWrap = document.createElement('div');
+      frameWrap.className = 'card pad';
+      frameWrap.innerHTML = `
+        <div class="section-title">${title||''}</div>
+        <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)">
+          <iframe src="${url}" style="width:100%;height:78vh;border:0;background:#fff" loading="eager" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+        </div>
+      `;
+      view.appendChild(frameWrap);
+    }
+
+    // Embedded Tools
+    function renderQuote(){
+      embedExternal('https://elitewrapzuk.github.io/elitequoter/', 'New Quote');
+    }
+    function renderOptimiser(){
+      embedExternal('https://elitewrapzuk.github.io/eliteoptimiser/', 'Cut Optimiser');
+    }
+    function renderSignatures(){
+      embedExternal('https://elitewrapzuk.github.io/elitewrapzsignatures/', 'In-Person Signatures');
+    }
+    function renderRemoteSign(){
+      embedExternal('https://elitewrapzuk.github.io/remotesignature/', 'Remote Signatures');
+    }
+    function renderRemoteQuote(){
+      embedExternal('https://elitewrapzuk.github.io/remotequoteform/', 'Remote Quote Form');
+    }
     // --- EMAIL VIEW ---
 
     function renderEmail() {
