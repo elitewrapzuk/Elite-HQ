@@ -334,7 +334,16 @@
   <a href="#/calendar" data-route="calendar"><span class="ico" data-ico="calendar"></span>Calendar</a>
   <a href="#/suppliers" data-route="suppliers"><span class="ico" data-ico="shield"></span>Suppliers</a>
   <a href="#/email" data-route="email"><span class="ico" data-ico="mail"></span>Email</a>
-  <a href="#/quote" data-route="quote"><span class="ico" data-ico="doc"></span>New Quote</a>
+  <div class="nav-group" data-group="quotes">
+    <button class="nav-group-header" type="button" aria-expanded="false">
+      <span class="left"><span class="ico" data-ico="doc"></span><span>Quotes</span></span>
+      <span class="chev">▾</span>
+    </button>
+    <div class="nav-sub" id="navQuotes">
+      <a href="#/quote" data-route="quote" class="sub"><span class="ico" data-ico="doc"></span>New Quote</a>
+      <a href="#/remote-quote" data-route="remote-quote" class="sub"><span class="ico" data-ico="doc"></span>Remote Quote Form</a>
+    </div>
+  </div>
   <a href="#/optimiser" data-route="optimiser"><span class="ico" data-ico="wrench"></span>Cut Optimiser</a>
   <div class="nav-group" data-group="signatures">
     <button class="nav-group-header" type="button" aria-expanded="false">
@@ -346,7 +355,6 @@
       <a href="#/remote-sign" data-route="remote-sign" class="sub"><span class="ico" data-ico="doc"></span>Remote Signatures</a>
     </div>
   </div>
-  <a href="#/remote-quote" data-route="remote-quote"><span class="ico" data-ico="doc"></span>Remote Quote Form</a>
       <a href="#/settings" data-route="settings"><span class="ico" data-ico="settings"></span>Settings</a>
       </nav>
         <button class="close-mobile" id="closeMobileBtn" aria-label="Close menu">✕</button>
@@ -852,6 +860,12 @@
       if(sigGroup){
         const isSig = (hash==='signatures' || hash==='remote-sign');
         if(isSig) sigGroup.classList.add('open');
+      }
+      // Auto-open quotes group if one of its routes is selected
+      const quotesGroup = document.querySelector('.nav-group[data-group="quotes"]');
+      if(quotesGroup){
+        const isQuote = (hash==='quote' || hash==='remote-quote');
+        if(isQuote) quotesGroup.classList.add('open');
       }
     }
 
