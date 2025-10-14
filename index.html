@@ -549,6 +549,7 @@
         </div>
       `;
       view.appendChild(frameWrap);
+      return frameWrap;
     }
 
     // Embedded Tools
@@ -565,7 +566,23 @@
       embedExternal('https://elitewrapzuk.github.io/remotesignature/', 'Remote Signatures');
     }
     function renderRemoteQuote(){
-      embedExternal('https://elitewrapzuk.github.io/remotequoteform/', 'Remote Quote Form');
+      const url = 'https://elitewrapzuk.github.io/remotequoteform/';
+      const card = embedExternal(url, 'Remote Quote Form');
+      // Add copyable link bar below the iframe
+      const bar = document.createElement('div');
+      bar.className = 'row';
+      bar.style = 'margin-top:10px;align-items:center;gap:8px';
+      const input = document.createElement('input');
+      input.className = 'input';
+      input.value = url;
+      input.readOnly = true;
+      input.style = 'flex:1';
+      const btn = document.createElement('button');
+      btn.className = 'btn';
+      btn.textContent = 'Copy Link';
+      btn.addEventListener('click', ()=> copyText(url));
+      bar.append(input, btn);
+      card.append(bar);
     }
     // --- EMAIL VIEW ---
 
