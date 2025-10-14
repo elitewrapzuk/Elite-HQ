@@ -369,29 +369,7 @@
 
   <!-- Modals -->
   <div class="modal-backdrop" id="modalBackdrop" aria-hidden="true"></div>
-  <!-- Email Templates Modal -->
-  <div class="modal-backdrop" id="templatesBackdrop" style="display:none" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" id="templatesModal">
-      <header>
-        <h3>Email Templates</h3>
-        <div>
-          <button class="btn" id="newTemplateBtn">New</button>
-          <button class="close-x" id="closeTemplates">✕</button>
-        </div>
-      </header>
-      <div class="body">
-        <div id="templatesList"></div>
-        <div id="templateEditor" style="display:none">
-          <input id="tplTitle" class="input" placeholder="Template title">
-          <textarea id="tplBody" class="input" rows="8" placeholder="Template body (use {{name}} etc)"></textarea>
-        </div>
-      </div>
-      <div class="footer">
-        <button class="btn" id="cancelTpl">Cancel</button>
-        <button class="btn primary" id="saveTpl">Save</button>
-      </div>
-    </div>
-  </div>
+  <!-- Email templates removed -->
   <!-- Toast -->
   <div class="toast" id="toast">Copied</div>
 
@@ -553,11 +531,6 @@
     /************ Router ************/
   const routes = { dashboard: renderDashboard, contacts: renderContacts, projects: renderProjects, calendar: renderCalendar, suppliers: renderSuppliers, email: renderEmail, settings: renderSettings };
     // --- EMAIL VIEW ---
-    const EMAIL_TEMPLATES = [
-      { name: 'Blank', subject: '', body: '' },
-      { name: 'Intro', subject: 'Introduction from Elite HQ', body: 'Hi [Name],\n\nI wanted to introduce myself and our company...' },
-      { name: 'Follow Up', subject: 'Following up', body: 'Hi [Name],\n\nJust checking in regarding our previous conversation...' },
-    ];
 
     function renderEmail() {
       const view = document.getElementById('view');
@@ -570,50 +543,32 @@
           <div style="flex:2;min-width:320px">
             <label>To:<input class="input" id="emailTo" type="email" placeholder="recipient@email.com" required></label><br>
             <label>Subject:<input class="input" id="emailSubject" type="text" placeholder="Subject"></label><br>
-            <label>Template:
-              <select class="input" id="emailTemplate">
-                ${loadTemplates().map((t,i)=>`<option value="${i}">${t.name}</option>`).join('')}
-              </select>
-            </label><br>
+            <!-- Templates removed -->
             <label>Body:<textarea class="input" id="emailBody" rows="8" placeholder="Write your email..."></textarea></label><br>
-            <label>Attachments:<input class="input" id="emailFiles" type="file" multiple></label><br>
+            <!-- Attachments removed -->
             <button class="btn primary" id="sendEmailBtn">Send Email</button>
           </div>
-          <div style="flex:1;min-width:220px">
-            <div class="section-title">Templates</div>
-            <ul id="templateList" style="list-style:none;padding:0;margin:0;">
-              ${EMAIL_TEMPLATES.map((t,i)=>`<li><button class="chip" data-tpl="${i}">${t.name}</button></li>`).join('')}
-            </ul>
-          </div>
         </div>
-        <div class="hint" style="margin-top:10px">Emails are sent via Google Apps Script. Attachments supported.</div>
+        </div>
+        <div class="hint" style="margin-top:10px">Emails are sent via Google Apps Script.</div>
       `;
       view.appendChild(container);
 
-      // Template selection logic
-      const templateSel = document.getElementById('emailTemplate');
       const subjectEl = document.getElementById('emailSubject');
       const bodyEl = document.getElementById('emailBody');
-      templateSel.addEventListener('change', e => {
-        const t = loadTemplates()[+e.target.value] || {subject:'', body:''};
-        subjectEl.value = t.subject || '';
-        bodyEl.value = t.body || '';
-      });
 
       // Send email (calls Google Apps Script endpoint)
       document.getElementById('sendEmailBtn').addEventListener('click', async () => {
         const to = document.getElementById('emailTo').value;
         const subject = subjectEl.value;
         const body = bodyEl.value;
-        const files = document.getElementById('emailFiles').files;
+  // attachments removed: no files collected
         if(!to){ showToast('Recipient required'); return; }
         const formData = new FormData();
         formData.append('to', to);
         formData.append('subject', subject);
         formData.append('body', body);
-        for(let i=0;i<files.length;i++){
-          formData.append('attachments', files[i]);
-        }
+        // Attachments are not supported in this build.
         // TODO: Replace with your deployed Google Apps Script web app URL
         const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzX0fCROXoQqcaqTYJowzG0nHnLpnuuX3eGa8J-VsJ_zupupPs1ENlbBPTvf6WltgUMIw/exec';
         try {
@@ -711,113 +666,32 @@
         el('div',{class:'section-title',html:'Theme & Presets'}),
         el('div',{style:'display:grid;grid-template-columns:1fr 240px;gap:12px;align-items:start'},[
           el('div',{},[
-            el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px'},[
-              el('label',{style:'width:120px'},[document.createTextNode('Primary Color')]), el('input',{type:'color',id:'themePrimary',value:'#01FABF'}),
-              el('label',{style:'width:120px;margin-left:12px'},[document.createTextNode('Background')]), el('input',{type:'color',id:'themeBg',value:'#f6f8fb'})
+            // stacked color pickers to avoid overlapping the Saved Presets column
+            el('div',{style:'display:flex;flex-direction:column;gap:8px;align-items:start;margin-bottom:8px'},[
+              el('div',{style:'display:flex;align-items:center;gap:8px'},[ el('label',{style:'width:120px'},[document.createTextNode('Primary Color')]), el('input',{type:'color',id:'themePrimary',value:'#01FABF'}) ]),
+              el('div',{style:'display:flex;align-items:center;gap:8px'},[ el('label',{style:'width:120px'},[document.createTextNode('Background')]), el('input',{type:'color',id:'themeBg',value:'#f6f8fb'}) ]),
+              el('div',{style:'display:flex;align-items:center;gap:8px'},[ el('label',{style:'width:120px'},[document.createTextNode('Surface')]), el('input',{type:'color',id:'themeSurface',value:'#ffffff'}) ]),
+              el('div',{style:'display:flex;align-items:center;gap:8px'},[ el('label',{style:'width:120px'},[document.createTextNode('Ink')]), el('input',{type:'color',id:'themeInk',value:'#0f172a'}) ])
             ]),
-            el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px'},[
-              el('label',{style:'width:120px'},[document.createTextNode('Surface')]), el('input',{type:'color',id:'themeSurface',value:'#ffffff'}),
-              el('label',{style:'width:120px;margin-left:12px'},[document.createTextNode('Ink')]), el('input',{type:'color',id:'themeInk',value:'#0f172a'})
-            ]),
-            el('div',{style:'display:flex;gap:8px;align-items:center'},[
+            el('div',{style:'display:flex;gap:8px;align-items:center;flex-wrap:wrap'},[
               el('label',{style:'width:120px'},[document.createTextNode('Radius px')]), el('input',{type:'number',id:'themeRadius',value:14,style:'width:80px'}),
-              el('label',{style:'width:120px;margin-left:12px'},[document.createTextNode('Shadow')]), el('select',{id:'themeShadow'},[ el('option',{value:'sm',html:'Small'}), el('option',{value:'md',html:'Medium'}) ])
+              // shrink shadow select to avoid overflow and allow wrapping
+              el('label',{style:'width:120px;margin-left:12px'},[document.createTextNode('Shadow')]), el('select',{id:'themeShadow',style:'min-width:120px;max-width:160px'},[ el('option',{value:'sm',html:'Small'}), el('option',{value:'md',html:'Medium'}) ])
             ]),
             el('div',{style:'height:8px'}),
-            el('div',{class:'row',style:'justify-content:flex-start;gap:8px'},[
-              el('button',{class:'chip',onclick:applyThemeFromInputs},[document.createTextNode('Apply')]),
-              el('button',{class:'chip',onclick:saveThemePreset},[document.createTextNode('Save Preset')]),
-              el('button',{class:'chip',onclick:exportThemePresets},[document.createTextNode('Export Presets')]),
-              el('label',{class:'chip',style:'cursor:pointer'},[ el('input',{type:'file',id:'importThemePresets',accept:'.json',style:'display:none'}), document.createTextNode('Import Presets') ])
+            el('div',{class:'row',style:'justify-content:flex-start;gap:8px;flex-wrap:wrap'},[
+              el('button',{class:'chip',onclick:applyThemeFromInputs},[document.createTextNode('Apply')])
             ])
           ]),
-          el('div',{},[
-            el('div',{class:'section-title',html:'Saved Presets'}),
-            el('div',{id:'presetsList',style:'display:flex;flex-direction:column;gap:8px;margin-top:8px',html:''})
-          ])
+          // Saved Presets column removed to simplify layout
         ])
       ])
       ,
-      el('div',{style:'height:12px'}),
-      el('div',{class:'card pad'},[
-        el('div',{class:'section-title',html:'Email Templates'}),
-        el('div',{style:'display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start'},[
-          el('div',{},[
-              el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px'},[
-                el('button',{class:'chip',id:'settingsNewTplBtn'},[document.createTextNode('+ New Template')]),
-                el('div',{class:'hint',style:'margin-left:8px'},[document.createTextNode('Create or edit email templates used in Compose → Email')])
-              ]),
-              el('div',{id:'settingsTemplatesList',style:'display:flex;flex-direction:column;gap:8px',html:''})
-            ]),
-            el('div',{},[])
-        ])
-      ])
+      // Email templates removed from Settings
       ]);
       view.append(wrap);
 
-      // Settings: Templates inline editor wiring (robust)
-      (function wireSettingsTemplates(){
-        const listWrap = document.getElementById('settingsTemplatesList');
-        const newBtn = document.getElementById('settingsNewTplBtn');
-        if(!listWrap || !newBtn) return;
-        // create editor area
-        const editor = el('div',{id:'settingsTplEditor'},[
-          el('div',{},[ el('div',{style:'font-weight:700;margin-bottom:6px'},[document.createTextNode('Title')]), el('input',{id:'settingsTplTitle',class:'input'}) ]),
-          el('div',{style:'height:8px'}),
-          el('div',{},[ el('div',{style:'font-weight:700;margin-bottom:6px'},[document.createTextNode('Body')]), el('textarea',{id:'settingsTplBody',class:'input',rows:8}) ]),
-          el('div',{style:'height:8px'}),
-          el('div',{style:'display:flex;gap:8px'},[
-            el('button',{class:'btn primary',id:'settingsSaveTplBtn'},[document.createTextNode('Save')]),
-            el('button',{class:'btn',id:'settingsCancelTplBtn'},[document.createTextNode('Cancel')])
-          ])
-        ]);
-        // append editor into the second column of the templates grid (safe traversal)
-        const grid = listWrap.parentElement && listWrap.parentElement.parentElement;
-        if(grid && grid.children && grid.children[1]){
-          grid.children[1].innerHTML = '';
-          grid.children[1].appendChild(editor);
-        }
-
-        let editing = null;
-        function renderList(){
-          const arr = loadTemplates();
-          listWrap.innerHTML='';
-          if(!arr.length) listWrap.append(el('div',{class:'empty',html:'No templates yet'}));
-          arr.forEach((t,i)=>{
-            const left = el('div',{style:'flex:1'},[ el('strong',{},[document.createTextNode(t.name)]), el('div',{class:'muted',style:'font-size:12px;white-space:pre-wrap'},[document.createTextNode((t.body||'').slice(0,120)||'')]) ]);
-            const actionsWrap = el('div',{style:'display:flex;gap:8px'},[]);
-            const editBtn = el('button',{class:'chip'},[document.createTextNode('Edit')]);
-            editBtn.addEventListener('click', ()=>{
-              editing = i;
-              const titleEl = document.getElementById('settingsTplTitle');
-              const bodyEl = document.getElementById('settingsTplBody');
-              if(titleEl) titleEl.value = t.name;
-              if(bodyEl) bodyEl.value = t.body||'';
-              if(titleEl) titleEl.focus();
-            });
-            const delBtn = el('button',{class:'chip'},[document.createTextNode('Delete')]);
-            delBtn.addEventListener('click', ()=>{
-              if(!confirm('Delete template?')) return;
-              const a = loadTemplates(); a.splice(i,1); saveTemplates(a); renderList();
-              if(typeof showToast === 'function') showToast('Template deleted');
-              console.log('Template deleted', i, t.name);
-            });
-            actionsWrap.append(editBtn, delBtn);
-            const row = el('div',{style:'display:flex;align-items:center;justify-content:space-between;gap:8px'},[ left, actionsWrap ]);
-            listWrap.append(row);
-          });
-        }
-
-        newBtn.addEventListener('click', ()=>{ editing=null; const titleEl = document.getElementById('settingsTplTitle'); const bodyEl = document.getElementById('settingsTplBody'); if(titleEl) titleEl.value=''; if(bodyEl) bodyEl.value=''; if(titleEl) titleEl.focus(); });
-        const cancelBtn = document.getElementById('settingsCancelTplBtn'); if(cancelBtn) cancelBtn.addEventListener('click', ()=>{ editing=null; const titleEl = document.getElementById('settingsTplTitle'); const bodyEl = document.getElementById('settingsTplBody'); if(titleEl) titleEl.value=''; if(bodyEl) bodyEl.value=''; });
-        const saveBtn = document.getElementById('settingsSaveTplBtn'); if(saveBtn) saveBtn.addEventListener('click', ()=>{
-          const titleEl = document.getElementById('settingsTplTitle'); const bodyEl = document.getElementById('settingsTplBody'); const name = (titleEl && titleEl.value||'').trim() || 'Untitled'; const body = (bodyEl && bodyEl.value) || '';
-          const arr = loadTemplates();
-          if(editing==null) arr.push({ name, subject:'', body }); else { arr[editing].name = name; arr[editing].body = body; }
-          saveTemplates(arr); renderList(); editing=null; if(typeof showToast === 'function') showToast('Template saved', {type:'success'});
-        });
-        renderList();
-      })();
+      
 
       const logoFile = document.getElementById('logoFile');
       const settingsLogoImg = document.getElementById('settingsLogoImg');
@@ -890,11 +764,8 @@
           }catch(e){ showToast('Apply theme failed'); }
         }
         function applyThemeFromInputs(){ applyTheme(getThemeInputs()); }
-  function saveThemePreset(){ const cfg = loadSettings(); cfg.presets = cfg.presets||[]; const t = getThemeInputs(); const name = prompt('Preset name'); if(!name) return; cfg.presets.push({ name, theme:t }); saveSettings(cfg); renderPresets(); if(typeof showToast === 'function') showToast('Preset saved', {type:'success'}); }
-        function renderPresets(){ const wrap = document.getElementById('presetsList'); if(!wrap) return; wrap.innerHTML=''; const cfg = loadSettings(); (cfg.presets||[]).forEach((p,i)=>{ const row = el('div',{style:'display:flex;gap:8px;align-items:center'},[ el('div',{style:'flex:1'},[document.createTextNode(p.name)]), el('button',{class:'chip',onclick:()=>{ applyTheme(p.theme); }},[document.createTextNode('Apply')]), el('button',{class:'chip',onclick:()=>{ if(confirm('Delete preset?')){ cfg.presets.splice(i,1); saveSettings(cfg); renderPresets(); } }},[document.createTextNode('Delete')]) ]); wrap.append(row); }); }
-  function exportThemePresets(){ const cfg = loadSettings(); const blob = new Blob([JSON.stringify(cfg.presets||[], null, 2)],{type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='elite-hq-theme-presets.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); if(typeof showToast === 'function') showToast('Presets exported', {type:'success'}); }
-  document.addEventListener('change', (e)=>{ if(e.target && e.target.id==='importThemePresets'){ const f = e.target.files && e.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = ()=>{ try{ const parsed = JSON.parse(r.result); const cfg = loadSettings(); cfg.presets = (cfg.presets||[]).concat(parsed); saveSettings(cfg); renderPresets(); if(typeof showToast === 'function') showToast('Presets imported', {type:'success'}); }catch(err){ if(typeof showToast === 'function') showToast('Invalid presets file', {type:'warn'}); } }; r.readAsText(f); } });
-        renderPresets();
+  // preset save removed
+    // presets feature removed
     }
     function route(){
       const hash = location.hash.replace('#/','') || 'dashboard';
@@ -1320,7 +1191,7 @@
 
     /************ Sidebar drag & reorder + Mobile toggle ************/
     const NAV_ORDER_KEY = 'ew_nav_order';
-    const TEMPLATES_KEY = 'ew_email_templates';
+  // templates removed
 
     function loadNavOrder(){
       return Store.get(NAV_ORDER_KEY, null);
@@ -1419,104 +1290,7 @@
       });
     });
 
-    /************ Email templates CRUD (localStorage) ************/
-    function loadTemplates(){ return Store.get(TEMPLATES_KEY, EMAIL_TEMPLATES); }
-    function saveTemplates(tpl){ Store.set(TEMPLATES_KEY, tpl); }
-
-    // Wire modal open when clicking Email nav
-    document.querySelector('[data-route="email"]').addEventListener('click', (e)=>{
-      // show email page as usual, but also allow opening template manager via long-press or separate button
-      // We'll add a small keyboard shortcut: Alt+T opens template manager
-      setTimeout(()=> route(), 10);
-    });
-
-    // Modal controls
-    const templatesBackdrop = document.getElementById('templatesBackdrop');
-    const templatesModal = document.getElementById('templatesModal');
-    const newTplBtn = document.getElementById('newTemplateBtn');
-    const closeTemplates = document.getElementById('closeTemplates');
-    const templatesList = document.getElementById('templatesList');
-    const editor = document.getElementById('templateEditor');
-    const tplTitle = document.getElementById('tplTitle');
-    const tplBody = document.getElementById('tplBody');
-    const saveTplBtn = document.getElementById('saveTpl');
-    const cancelTplBtn = document.getElementById('cancelTpl');
-
-    let editingIndex = null;
-
-    function openTemplatesModal(){
-      renderTemplatesList();
-      templatesBackdrop.style.display='flex'; templatesBackdrop.removeAttribute('aria-hidden');
-    }
-    function closeTemplatesModal(){ templatesBackdrop.style.display='none'; templatesBackdrop.setAttribute('aria-hidden','true'); editor.style.display='none'; editingIndex = null; }
-
-    function renderTemplatesList(){
-      const list = loadTemplates();
-      templatesList.innerHTML='';
-      if(!list.length) templatesList.append(el('div',{class:'empty',html:'No templates yet'}));
-      list.forEach((t,i)=>{
-        const row = el('div',{style:'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px'});
-        row.append(el('div',{html:`<strong>${t.name}</strong><div class="muted" style="font-size:12px;white-space:pre-wrap">${(t.subject||'')}</div>` }));
-        const actions = el('div',{style:'display:flex;gap:8px'},[]);
-        const editBtn = el('button',{class:'chip'},[document.createTextNode('Edit')]);
-        editBtn.addEventListener('click', ()=>{
-          editingIndex=i; tplTitle.value=t.name; tplBody.value=t.body||''; editor.style.display='block'; tplTitle.focus();
-        });
-        const delBtn = el('button',{class:'chip'},[document.createTextNode('Delete')]);
-        delBtn.addEventListener('click', ()=>{
-          if(!confirm('Delete template?')) return;
-          const arr = loadTemplates(); arr.splice(i,1); saveTemplates(arr); renderTemplatesList(); renderEmail();
-            if(typeof showToast === 'function') showToast('Template deleted');
-          console.log('Deleted template', i, t.name);
-        });
-        actions.append(editBtn, delBtn);
-        row.append(actions);
-        templatesList.append(row);
-      });
-    }
-
-    newTplBtn.addEventListener('click', ()=>{ editingIndex=null; tplTitle.value=''; tplBody.value=''; editor.style.display='block'; tplTitle.focus(); });
-    closeTemplates.addEventListener('click', closeTemplatesModal);
-    cancelTplBtn.addEventListener('click', closeTemplatesModal);
-    saveTplBtn.addEventListener('click', ()=>{
-      const name = tplTitle.value.trim() || 'Untitled';
-      const body = tplBody.value || '';
-      const arr = loadTemplates();
-      if(editingIndex==null){ arr.push({ name, subject:'', body }); }
-      else { arr[editingIndex].name = name; arr[editingIndex].body = body; }
-      saveTemplates(arr); renderTemplatesList(); editor.style.display='none'; editingIndex=null; showToast('Template saved');
-      // update any open Email view immediately
-      try{ renderEmail(); }catch(e){}
-    });
-
-    // open templates via Alt+T global shortcut
-    window.addEventListener('keydown', (e)=>{ if((e.altKey || e.metaKey) && e.key.toLowerCase()==='t'){ e.preventDefault(); openTemplatesModal(); } });
-
-    // Small helper: when on Email view, populate template select from stored templates
-    const originalRenderEmail = renderEmail;
-    renderEmail = function(){
-      originalRenderEmail();
-      const stored = loadTemplates();
-      const sel = document.getElementById('emailTemplate');
-      if(!sel) return;
-      sel.innerHTML = stored.map((t,i)=>`<option value="${i}">${t.name}</option>`).join('');
-      document.getElementById('templateList').innerHTML = stored.map((t,i)=>`<li><button class="chip" data-tpl="${i}">${t.name}</button></li>`).join('');
-      // wire the template buttons again
-  const tplListEl = document.getElementById('templateList');
-  // replace content
-  tplListEl.innerHTML = stored.map((t,i)=>`<li><button class="chip" data-tpl="${i}">${t.name}</button></li>`).join('');
-  // remove any previous handler by cloning
-  const newTplList = tplListEl.cloneNode(true);
-  tplListEl.parentNode.replaceChild(newTplList, tplListEl);
-  newTplList.addEventListener('click', e=>{ if(e.target.matches('button[data-tpl]')){ const t=loadTemplates()[+e.target.dataset.tpl]; document.getElementById('emailSubject').value=t.subject||''; document.getElementById('emailBody').value=t.body||''; sel.value = e.target.dataset.tpl; } });
-      // add a small "Manage" button near templates
-      const manage = el('button',{class:'btn', onclick: openTemplatesModal},[document.createTextNode('Manage Templates')]);
-      const container = document.querySelector('#view .card .row div[style*="flex:1"]');
-      if(container && !container.querySelector('.manage-templates')){
-        const wrap = el('div',{class:'manage-templates', style:'margin-top:10px'},[manage]);
-        container.append(wrap);
-      }
-    };
+    // email templates removed
 
     // finalize initial hydration
     hydrateInlineIcons();
