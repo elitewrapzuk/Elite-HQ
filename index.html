@@ -628,8 +628,8 @@
         }catch(e){ console.error('Migration failed', e); showCloudStatus('Migration failed'); }
       }
 
-      // expose helper functions globally so Settings UI can call them
-      window.EL_FIREBASE = { initFirebase, backupNow, restoreNow, showCloudStatus, migrateFrom };
+  // expose helper functions globally so Settings UI can call them — merge onto existing object to preserve debug fields
+  window.EL_FIREBASE = Object.assign(window.EL_FIREBASE || {}, { initFirebase, backupNow, restoreNow, showCloudStatus, migrateFrom });
 
       // init on load (give the page a second to finish wiring)
       setTimeout(()=>{ try{ initFirebase(); }catch(e){ console.error(e); } }, 800);
