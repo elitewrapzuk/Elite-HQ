@@ -70,6 +70,12 @@
   .nav a.sub{padding-left:28px}
   .nav a.sub.active{background:var(--ink);color:#fff}
 
+  /* Sidebar footer (sticky Settings at bottom) */
+  .sidebar-footer{position:absolute;left:12px;right:12px;bottom:20px}
+  .sidebar-footer a{display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;color:var(--ink);text-decoration:none;font-weight:700;border:1px solid transparent;background:transparent}
+  .sidebar-footer a:hover{background:var(--nav-hover)}
+  @media (max-width:980px){ .sidebar-footer{bottom:80px} }
+
     /* TOP BAR (Glass) */
     .main{display:flex;flex-direction:column;min-width:0}
     .topbar{height:58px;backdrop-filter: blur(12px);background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 14px;gap:10px;position:sticky;top:0;z-index:5;transition:background .3s ease,border-color .3s ease;box-shadow:var(--glass-ring)}
@@ -348,7 +354,7 @@
         <div class="logo-mark" id="logoMark"><span>EW</span><img id="logoMarkImg" alt=""></div>
         <div class="logo-title">Elite HQ</div>
       </div>
-      <nav class="nav" id="nav">
+    <nav class="nav" id="nav">
   <a href="#/dashboard" data-route="dashboard" class="active"><span class="ico" data-ico="home"></span>Dashboard</a>
   <a href="#/contacts" data-route="contacts"><span class="ico" data-ico="user"></span>Contacts</a>
   <a href="#/referrals" data-route="referrals"><span class="ico" data-ico="star"></span>Referrals</a>
@@ -386,8 +392,10 @@
       <a href="#/remote-sign" data-route="remote-sign" class="sub"><span class="ico" data-ico="doc"></span>Remote Signatures</a>
     </div>
   </div>
-      <a href="#/settings" data-route="settings"><span class="ico" data-ico="settings"></span>Settings</a>
       </nav>
+      <div class="sidebar-footer" id="sidebarFooter">
+        <a href="#/settings" data-route="settings" id="sidebarSettingsLink"><span class="ico" data-ico="settings"></span>Settings</a>
+      </div>
         <button class="close-mobile" id="closeMobileBtn" aria-label="Close menu">✕</button>
     </aside>
 
@@ -791,7 +799,7 @@
       }
 
   // expose helper functions globally so Settings UI can call them — merge onto existing object to preserve debug fields
-  window.EL_FIREBASE = Object.assign(window.EL_FIREBASE || {}, { initFirebase, backupNow, restoreNow, showCloudStatus, migrateFrom });
+  window.EL_FIREBASE = Object.assign(window.EL_FIREBASE || {}, { initFirebase, backupNow, restoreNow, showCloudStatus, migrateFrom, findLatestBackupAndMaybeImport });
 
       // init on load (give the page a second to finish wiring)
       setTimeout(()=>{ try{ initFirebase(); }catch(e){ console.error(e); } }, 800);
@@ -2217,7 +2225,12 @@
       if(closeMobileBtn && sidebar){ closeMobileBtn.addEventListener('click', ()=> { sidebar.classList.remove('open'); menuBtn && menuBtn.setAttribute('aria-expanded','false'); }); }
 
       // ensure clicking a nav link closes sidebar on mobile (guarded)
-      $$('#nav a').forEach(a=> a.addEventListener('click', ()=>{ const sb = document.getElementById('sidebar'); if(sb && window.innerWidth <= 980) { sb.classList.remove('open'); menuBtn && menuBtn.setAttribute('aria-expanded','false'); } }));
+      function attachMobileCloseToLinks(){
+        $$('#nav a').forEach(a=> a.addEventListener('click', ()=>{ const sb = document.getElementById('sidebar'); if(sb && window.innerWidth <= 980) { sb.classList.remove('open'); menuBtn && menuBtn.setAttribute('aria-expanded','false'); } }));
+        const footerLink = document.getElementById('sidebarSettingsLink');
+        if(footerLink){ footerLink.addEventListener('click', ()=>{ const sb = document.getElementById('sidebar'); if(sb && window.innerWidth <= 980){ sb.classList.remove('open'); menuBtn && menuBtn.setAttribute('aria-expanded','false'); } }); }
+      }
+      attachMobileCloseToLinks();
 
       // when resizing to desktop widths, ensure mobile sidebar is closed
       window.addEventListener('resize', ()=>{
