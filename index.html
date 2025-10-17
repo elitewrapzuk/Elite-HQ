@@ -466,6 +466,24 @@
       },
       set(key, value){ localStorage.setItem(key, JSON.stringify(value)); }
     };
+
+    // Global wrapper to ensure auto-backup triggers on every Store.set.
+    // This is defensive: it will attempt to call EL_FIREBASE.backupNow() if available,
+    // otherwise mark a pending flag so the Firebase init can run the backup once ready.
+    (function ensureAutoBackupWrapper(){
+      try{
+        const _orig = Store.set.bind(Store);
+        Store.set = function(k,v){ _orig(k,v); try{
+          if(window.EL_FIREBASE && typeof window.EL_FIREBASE.backupNow === 'function'){
+            try{ window.EL_FIREBASE.backupNow(); }
+            catch(e){ /* ignore */ }
+          } else {
+            // mark a pending backup so init can run it once firebase is ready
+            window._pendingBackup = true;
+          }
+        }catch(e){} };
+      }catch(e){ console.warn('Auto backup wrapper init failed', e); }
+    })();
     const db = {
       links: Store.get('ew_links',[
         { id: crypto.randomUUID(), title:'Gmail', url:'https://mail.google.com', icon:'mail', color:'neutral' },
@@ -552,7 +570,9 @@
               if(fbDocRef && fbDocRef.id === uid && firebaseReady){ showCloudStatus('Connected'); return; }
               attachDocListener(fdb, uid);
               firebaseReady = true;
-              showCloudStatus('Connected');
+                showCloudStatus('Connected');
+                // If any Store.set happened before Firebase was ready, perform a pending backup now
+                try{ if(window._pendingBackup){ window._pendingBackup = false; doBackupNow(); } }catch(e){}
             } else {
               // not signed-in yet — attempt anonymous sign-in
               auth.signInAnonymously().catch(err => { console.error('Auth err', err); showCloudStatus('Auth error'); });
