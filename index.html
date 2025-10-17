@@ -588,8 +588,44 @@
         Store.set = function(k,v){ _orig(k,v); try{ if(!suppressLocalSync) doBackupNow(); }catch(e){} };
       }catch(e){ console.warn('Could not wrap Store.set', e); }
 
+      // migration helper: merge another backup doc into the current user's backup
+      async function migrateFrom(oldDocId){
+        if(!oldDocId) { showCloudStatus('Provide source doc id'); return; }
+        if(!firebaseReady || !fbDocRef){ showCloudStatus('Not connected'); return; }
+        try{
+          const fdb = firebase.firestore();
+          const sourceRef = fdb.collection('backups').doc(oldDocId);
+          const srcSnap = await sourceRef.get();
+          if(!srcSnap.exists){ showCloudStatus('Source doc not found'); return; }
+          const src = srcSnap.data() || {};
+
+          const destSnap = await fbDocRef.get();
+          const dest = destSnap.exists ? (destSnap.data() || {}) : {};
+
+          const merged = Object.assign({}, dest);
+          ['contacts','projects','suppliers','referrals','calendarEvents'].forEach(key => {
+            const a = Array.isArray(dest[key]) ? dest[key].slice() : [];
+            const b = Array.isArray(src[key]) ? src[key].slice() : [];
+            // merge with simple de-dup by id when available
+            b.forEach(item => {
+              try{
+                if(item && item.id){ if(!a.find(x=>x && x.id === item.id)) a.push(item); }
+                else a.push(item);
+              }catch(e){ a.push(item); }
+            });
+            merged[key] = a;
+          });
+          merged.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+          await fbDocRef.set(merged, { merge: true });
+          showCloudStatus('Migration complete — merged');
+          // refresh local from cloud
+          try{ const newSnap = await fbDocRef.get(); if(newSnap.exists){ suppressLocalSync = true; const d = newSnap.data() || {}; if(d.contacts) { Store.set('ew_contacts', d.contacts); db.contacts = d.contacts; } if(d.projects) { Store.set('ew_projects', d.projects); db.projects = d.projects; } if(d.suppliers) { Store.set('ew_suppliers', d.suppliers); db.suppliers = d.suppliers; } if(d.referrals) { Store.set('ew_referrals', d.referrals); db.referrals = d.referrals; } if(d.calendarEvents) { Store.set('ew_calendar', d.calendarEvents); db.calendarEvents = d.calendarEvents; } persist(); setTimeout(()=> suppressLocalSync=false,500); }
+          }catch(e){}
+        }catch(e){ console.error('Migration failed', e); showCloudStatus('Migration failed'); }
+      }
+
       // expose helper functions globally so Settings UI can call them
-      window.EL_FIREBASE = { initFirebase, backupNow, restoreNow, showCloudStatus };
+      window.EL_FIREBASE = { initFirebase, backupNow, restoreNow, showCloudStatus, migrateFrom };
 
       // init on load (give the page a second to finish wiring)
       setTimeout(()=>{ try{ initFirebase(); }catch(e){ console.error(e); } }, 800);
