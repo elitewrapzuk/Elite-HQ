@@ -326,6 +326,10 @@
       }
     }
   </style>
+  <!-- Firebase compat SDKs (loaded for backup/sync) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
   <div class="app">
@@ -468,6 +472,107 @@
       Store.set('ew_suppliers', db.suppliers);
       Store.set('ew_calendar', db.calendarEvents);
     }
+
+    /* Firebase backup & sync helper */
+    (function setupFirebaseSync(){
+      // Paste your firebase config here (you provided this to me)
+      const FIREBASE_CONFIG = {
+        apiKey: "AIzaSyCnYFHzbR7iWbHvEj3hBq7mOBe7p7VBMSY",
+        authDomain: "elite-hq-6e0b7.firebaseapp.com",
+        databaseURL: "https://elite-hq-6e0b7-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "elite-hq-6e0b7",
+        storageBucket: "elite-hq-6e0b7.firebasestorage.app",
+        messagingSenderId: "454926724633",
+        appId: "1:454926724633:web:a2ec3265f29c025794c488"
+      };
+
+      let firebaseReady = false;
+      let fbDocRef = null;
+      let suppressLocalSync = false;
+      // simple debounce helper
+      function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t = setTimeout(()=> fn(...a), ms); }; }
+
+      function showCloudStatus(txt){ 
+        const el = document.getElementById('cloudSyncState'); if(el) el.textContent = txt;
+        const top = document.getElementById('cloudSyncStateTop'); if(top) top.textContent = txt;
+      }
+
+      function initFirebase(){
+        try{
+          if(!window.firebase) { showCloudStatus('Firebase SDK not loaded'); return; }
+          firebase.initializeApp(FIREBASE_CONFIG);
+          const auth = firebase.auth();
+          const fdb = firebase.firestore();
+          auth.signInAnonymously().then(()=>{
+            const uid = auth.currentUser && auth.currentUser.uid ? auth.currentUser.uid : 'anonymous';
+            fbDocRef = fdb.collection('backups').doc(uid);
+            // listen for remote changes
+            fbDocRef.onSnapshot(snap => {
+              if(!snap.exists){ showCloudStatus('No cloud backup'); return; }
+              const data = snap.data() || {};
+              // apply remote -> local with suppress flag to avoid loops
+              suppressLocalSync = true;
+              try{
+                if(data.contacts) { Store.set('ew_contacts', data.contacts); db.contacts = data.contacts; }
+                if(data.projects) { Store.set('ew_projects', data.projects); db.projects = data.projects; }
+                if(data.suppliers) { Store.set('ew_suppliers', data.suppliers); db.suppliers = data.suppliers; }
+                if(data.calendarEvents) { Store.set('ew_calendar', data.calendarEvents); db.calendarEvents = data.calendarEvents; }
+                persist();
+                showCloudStatus('Synced from cloud');
+              }catch(e){ console.error('Apply remote failed', e); showCloudStatus('Apply remote failed'); }
+              setTimeout(()=> suppressLocalSync = false, 500);
+            }, err => { console.error('Cloud listen err', err); showCloudStatus('Cloud listen error'); });
+            firebaseReady = true;
+            showCloudStatus('Connected');
+          }).catch(err => { console.error('Auth err', err); showCloudStatus('Auth error'); });
+        }catch(e){ console.error(e); showCloudStatus('Init error'); }
+      }
+
+      const doBackupNow = debounce(function(){
+        if(!firebaseReady || !fbDocRef) { showCloudStatus('Not connected'); return; }
+        const payload = {
+          contacts: db.contacts || [],
+          projects: db.projects || [],
+          suppliers: db.suppliers || [],
+          calendarEvents: db.calendarEvents || [],
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        fbDocRef.set(payload, { merge: true }).then(()=> showCloudStatus('Backup saved'))
+          .catch(e=>{ console.error('Backup failed', e); showCloudStatus('Backup failed'); });
+      }, 800);
+
+      function backupNow(){ doBackupNow(); }
+      function restoreNow(){
+        if(!firebaseReady || !fbDocRef) { showCloudStatus('Not connected'); return; }
+        fbDocRef.get().then(snap => {
+          if(!snap.exists){ showCloudStatus('No cloud backup'); return; }
+          const data = snap.data() || {};
+          suppressLocalSync = true;
+          try{
+            if(data.contacts) { Store.set('ew_contacts', data.contacts); db.contacts = data.contacts; }
+            if(data.projects) { Store.set('ew_projects', data.projects); db.projects = data.projects; }
+            if(data.suppliers) { Store.set('ew_suppliers', data.suppliers); db.suppliers = data.suppliers; }
+            if(data.calendarEvents) { Store.set('ew_calendar', data.calendarEvents); db.calendarEvents = data.calendarEvents; }
+            persist();
+            showCloudStatus('Restored from cloud — reloading');
+            setTimeout(()=> location.reload(), 600);
+          }catch(e){ console.error('Restore failed', e); showCloudStatus('Restore failed'); }
+          setTimeout(()=> suppressLocalSync = false, 500);
+        }).catch(e=>{ console.error('Restore err', e); showCloudStatus('Restore failed'); });
+      }
+
+      // wrap Store.set to trigger cloud backup (but avoid doing so while applying remote changes)
+      try{
+        const _orig = Store.set.bind(Store);
+        Store.set = function(k,v){ _orig(k,v); try{ if(!suppressLocalSync) doBackupNow(); }catch(e){} };
+      }catch(e){ console.warn('Could not wrap Store.set', e); }
+
+      // expose helper functions globally so Settings UI can call them
+      window.EL_FIREBASE = { initFirebase, backupNow, restoreNow, showCloudStatus };
+
+      // init on load (give the page a second to finish wiring)
+      setTimeout(()=>{ try{ initFirebase(); }catch(e){ console.error(e); } }, 800);
+    })();
 
     /************ Icons (outline, inline) ************/
     const Icons = {
@@ -1010,6 +1115,14 @@
       // normalize tags to objects {name,color} for newer UX
       cfg.tags = (cfg.tags||[]).map(t => (typeof t === 'string') ? { name: t, color: '#01FABF' } : (t.name? t : { name: String(t), color: '#01FABF' }));
       const wrap = el('div',{},[
+        // Add a prominent backup control at the top of Settings
+        el('div',{class:'card pad', style: 'display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px'},[
+          el('div',{style:'font-weight:800;font-size:16px'},[ document.createTextNode('Settings') ]),
+          el('div',{style:'display:flex;gap:8px;align-items:center'},[
+            el('button',{class:'chip',onclick:()=>{ if(window.EL_FIREBASE) EL_FIREBASE.backupNow(); else showToast('Firebase not ready'); }},[document.createTextNode('Backup now')]),
+            el('div',{id:'cloudSyncStateTop',style:'font-size:13px;color:var(--muted);font-weight:600'},[document.createTextNode('Cloud: —')])
+          ])
+        ]),
         el('div',{class:'card pad'},[
           el('div',{class:'section-title',html:'Branding & Logo'}),
           el('div',{style:'display:flex;gap:12px;align-items:center'},[
@@ -1033,9 +1146,14 @@
           el('div',{class:'section-title',html:'Data — Export / Import'}),
           el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px'},[
             el('button',{class:'chip',onclick:exportAll},[document.createTextNode('Export data')]),
-            el('label',{class:'chip',style:'cursor:pointer'},[ el('input',{type:'file',id:'importFile',accept:'.json',style:'display:none'}), document.createTextNode('Import data') ])
+            el('label',{class:'chip',style:'cursor:pointer'},[ el('input',{type:'file',id:'importFile',accept:'.json',style:'display:none'}), document.createTextNode('Import data') ]),
+            el('button',{class:'chip',onclick:()=>{ if(window.EL_FIREBASE) EL_FIREBASE.backupNow(); else showToast('Firebase not ready'); }},[document.createTextNode('Backup now')]),
+            el('button',{class:'chip',onclick:()=>{ if(window.EL_FIREBASE) EL_FIREBASE.restoreNow(); else showToast('Firebase not ready'); }},[document.createTextNode('Restore from cloud')])
           ]),
           el('div',{class:'hint',html:'Export a JSON backup of your entire app data. Import will merge keys into localStorage (existing keys are overwritten).'}),
+          el('div',{style:'margin-top:8px;display:flex;gap:8px;align-items:center'},[
+            el('div',{id:'cloudSyncState',style:'font-weight:700;color:var(--muted)'},[ document.createTextNode('Cloud: —') ])
+          ]),
         ])
       ,
       el('div',{style:'height:12px'}),
