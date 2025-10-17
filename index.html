@@ -383,6 +383,9 @@
           <button class="icon-btn" id="awayBtn" title="Away Mode" onclick="openAwayOverlay()" aria-haspopup="dialog" aria-controls="awayOverlay" aria-expanded="false"><span class="ico" data-ico="shield"></span><span>Privacy</span></button>
           <!-- Autosave indicator -->
           <div id="autosaveIndicator" class="muted" style="font-size:13px;padding:0 8px;display:flex;align-items:center;gap:8px">Autosave: <span id="autosaveState">—</span></div>
+          <!-- Backup status -->
+          <div id="backupIndicator" class="muted" style="font-size:13px;padding:0 8px;display:flex;align-items:center;gap:8px">Last backup: <span id="lastBackup">—</span></div>
+          <button class="icon-btn" id="backupNowBtn" title="Backup now" style="height:34px;">Backup now</button>
           <div class="divider"></div>
           <div class="switch" id="modeSwitch" role="switch" aria-checked="false" tabindex="0" title="Toggle theme">
             <div class="knob"></div>
@@ -409,6 +412,59 @@
         <small class="muted">PIN: 6 digits • Desktop: type directly • Mobile: use keypad</small>
       </div>
     </div>
+      <script>
+        // Small UI glue for manual backup and status display
+        (function(){
+          function toast(msg, kind='success'){
+            const t = document.createElement('div'); t.className = 'toast show ' + (kind==='success' ? 'success' : 'warn');
+            t.textContent = msg;
+            const close = document.createElement('span'); close.textContent = '×'; close.className='close'; close.style.marginLeft='12px'; close.onclick = ()=>{ t.remove() };
+            t.appendChild(close);
+            document.body.appendChild(t);
+            setTimeout(()=> t.remove(), 5500);
+          }
+
+          const lastEl = document.getElementById('lastBackup');
+          const btn = document.getElementById('backupNowBtn');
+          const setLast = (ts) => { lastEl.textContent = ts ? new Date(ts).toLocaleString() : '—' };
+
+          // Try to read lastBackup timestamp from FirebaseHelpers if available
+          async function refreshLast(){
+            try{
+              if(window.FirebaseHelpers && window.FirebaseHelpers.loadHQData){
+                const d = await window.FirebaseHelpers.loadHQData();
+                if(d && d.updatedAt) setLast(d.updatedAt);
+                else setLast(null);
+              }
+            }catch(err){ console.debug('refreshLast failed',err); }
+          }
+
+          btn.addEventListener('click', async ()=>{
+            try{
+              btn.disabled = true; btn.textContent = 'Backing up...';
+              if(window.manualBackup){
+                const res = await window.manualBackup();
+                await refreshLast();
+                toast('Backup complete');
+              } else if(window.FirebaseHelpers && window.FirebaseHelpers.saveHQData){
+                await window.FirebaseHelpers.saveHQData();
+                await refreshLast();
+                toast('Backup complete');
+              } else {
+                toast('Backup helper not ready', 'warn');
+              }
+            }catch(err){
+              console.error('Backup failed',err);
+              toast('Backup failed: '+(err && err.message?err.message:err), 'warn');
+            }finally{ btn.disabled=false; btn.textContent='Backup now' }
+          });
+
+          // Refresh on load and periodically
+          window.addEventListener('load', ()=>{ setTimeout(refreshLast,1200); setInterval(refreshLast,60*1000); });
+          // expose a helper to update UI from FirebaseHelpers
+          window.__setLastBackupUI = (ts)=> setLast(ts);
+        })();
+      </script>
   </div>
 
   <!-- Modals -->
