@@ -577,8 +577,11 @@
             if(user){
               const uid = user.uid;
               // If we already have a listener for this uid, we're ready
-              if(fbDocRef && fbDocRef.id === uid && firebaseReady){ showCloudStatus('Connected'); return; }
-              attachDocListener(fdb, uid);
+              // prefer a stored canonical doc id if present
+              const storedDocId = Store.get('ew_cloud_docId', null);
+              const docToUse = storedDocId || uid;
+              if(fbDocRef && fbDocRef.id === docToUse && firebaseReady){ showCloudStatus('Connected'); return; }
+              attachDocListener(fdb, docToUse);
               firebaseReady = true;
                 showCloudStatus('Connected');
               // If any Store.set happened before Firebase was ready, perform a pending backup now
@@ -629,30 +632,15 @@
               // it's already attached via listener; nothing further required
               return;
             }
-            // Otherwise, either auto-merge or confirm with the user depending on settings
+            // AUTOMATIC FLOW: auto-migrate from the most recently updated doc and adopt it as canonical
             try{
-              const shouldConfirm = Store.get('ew_auto_merge_confirm', true);
-              if(shouldConfirm){
-                // show a confirmation modal summarising counts and sample items
-                const previewHtmlParts = [];
-                ['contacts','projects','suppliers','referrals','calendarEvents'].forEach(k=>{
-                  const arr = newest.data[k] || [];
-                  const sample = arr.slice(0,3).map(it=>`<div style="padding:4px 0;border-bottom:1px dashed var(--line);font-size:13px">${(it && it.id)?it.id:(JSON.stringify(it).slice(0,60))}</div>`).join('');
-                  previewHtmlParts.push(`<div style="margin-bottom:8px"><strong>${k} (${arr.length})</strong>${sample?('<div style="margin-top:6px">'+sample+'</div>') : ''}</div>`);
-                });
-                const body = el('div',{html: `<div style="max-height:320px;overflow:auto">${previewHtmlParts.join('')}</div><div style="height:10px"></div><label style=\"display:flex;align-items:center;gap:8px\"><input type=\"checkbox\" id=\"skipAutoMergeToggle\" /> Don't ask again (auto-merge in future)</label>`});
-                openModal('Auto-merge latest backup?', body, ()=>{
-                  // if user checks skip, update preference
-                  try{ const skip = document.getElementById('skipAutoMergeToggle') && document.getElementById('skipAutoMergeToggle').checked; if(skip){ Store.set('ew_auto_merge_confirm', false); } }catch(e){}
-                  // run merge in background
-                  migrateFrom(newest.id).then(()=> showCloudStatus('Auto-merged latest backup')).catch(e=>{ console.error('Auto-merge failed', e); showCloudStatus('Auto-merge failed'); });
-                  return true;
-                }, 'Merge', { className:'wide' });
-              } else {
-                await migrateFrom(newest.id);
-                showCloudStatus('Auto-merged latest backup');
-              }
-            }catch(e){ console.error('Auto-merge failed', e); }
+              await migrateFrom(newest.id);
+              // persist canonical doc id so future devices attach to the same doc
+              try{ Store.set('ew_cloud_docId', newest.id); }catch(e){}
+              // re-attach listener to the canonical doc
+              try{ attachDocListener(fdb, newest.id); }catch(e){}
+              showCloudStatus('Auto-adopted latest backup');
+            }catch(e){ console.error('Auto-merge/adopt failed', e); }
           }
         }catch(e){ console.error('findLatestBackupAndMaybeImport failed', e); }
       }
