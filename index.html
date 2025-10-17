@@ -341,6 +341,7 @@
       <nav class="nav" id="nav">
   <a href="#/dashboard" data-route="dashboard" class="active"><span class="ico" data-ico="home"></span>Dashboard</a>
   <a href="#/contacts" data-route="contacts"><span class="ico" data-ico="user"></span>Contacts</a>
+  <a href="#/referrals" data-route="referrals"><span class="ico" data-ico="star"></span>Referrals</a>
   <a href="#/projects" data-route="projects"><span class="ico" data-ico="folder"></span>Projects</a>
   <a href="#/calendar" data-route="calendar"><span class="ico" data-ico="calendar"></span>Calendar</a>
   <a href="#/suppliers" data-route="suppliers"><span class="ico" data-ico="shield"></span>Suppliers</a>
@@ -461,6 +462,7 @@
         { id: crypto.randomUUID(), title:'Calendar', url:'https://calendar.google.com', icon:'calendar', color:'neutral' },
       ]),
       contacts: Store.get('ew_contacts',[]),
+      referrals: Store.get('ew_referrals',[]),
       projects: Store.get('ew_projects',[]),
       suppliers: Store.get('ew_suppliers',[]),
       calendarEvents: Store.get('ew_calendar',[])
@@ -468,6 +470,7 @@
     function persist(){
       Store.set('ew_links', db.links);
       Store.set('ew_contacts', db.contacts);
+      Store.set('ew_referrals', db.referrals);
       Store.set('ew_projects', db.projects);
       Store.set('ew_suppliers', db.suppliers);
       Store.set('ew_calendar', db.calendarEvents);
@@ -516,6 +519,7 @@
                 if(data.contacts) { Store.set('ew_contacts', data.contacts); db.contacts = data.contacts; }
                 if(data.projects) { Store.set('ew_projects', data.projects); db.projects = data.projects; }
                 if(data.suppliers) { Store.set('ew_suppliers', data.suppliers); db.suppliers = data.suppliers; }
+                if(data.referrals) { Store.set('ew_referrals', data.referrals); db.referrals = data.referrals; }
                 if(data.calendarEvents) { Store.set('ew_calendar', data.calendarEvents); db.calendarEvents = data.calendarEvents; }
                 persist();
                 showCloudStatus('Synced from cloud');
@@ -534,6 +538,7 @@
           contacts: db.contacts || [],
           projects: db.projects || [],
           suppliers: db.suppliers || [],
+          referrals: db.referrals || [],
           calendarEvents: db.calendarEvents || [],
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
@@ -683,7 +688,7 @@
     }
 
     /************ Router ************/
-  const routes = { dashboard: renderDashboard, contacts: renderContacts, projects: renderProjects, calendar: renderCalendar, suppliers: renderSuppliers, email: renderEmail, 'email-templates': renderEmailTemplates, quote: renderQuote, optimiser: renderOptimiser, signatures: renderSignatures, 'remote-sign': renderRemoteSign, 'remote-quote': renderRemoteQuote, settings: renderSettings };
+  const routes = { dashboard: renderDashboard, contacts: renderContacts, referrals: renderReferrals, projects: renderProjects, calendar: renderCalendar, suppliers: renderSuppliers, email: renderEmail, 'email-templates': renderEmailTemplates, quote: renderQuote, optimiser: renderOptimiser, signatures: renderSignatures, 'remote-sign': renderRemoteSign, 'remote-quote': renderRemoteQuote, settings: renderSettings };
 
     // External tool embed helper
     function embedExternal(url, title){
@@ -732,6 +737,84 @@
       btn.addEventListener('click', ()=> copyText(url));
       bar.append(input, btn);
       card.append(bar);
+    }
+    
+    // --- REFERRALS VIEW ---
+    function renderReferrals(){
+      const view = document.getElementById('view'); view.innerHTML = '';
+      const container = el('div',{class:'card pad'},[
+        el('h2',{html:'Referrals'}),
+        el('div',{style:'display:grid;grid-template-columns:1fr 320px;gap:12px'},[
+          el('div',{},[
+            el('div',{class:'card pad'},[
+              el('div',{class:'section-title',html:'Create referral code'}),
+              el('label',{},[ document.createTextNode('Client name'), el('input',{id:'ref_name',class:'input',placeholder:'Client name'}) ]),
+              el('label',{},[ document.createTextNode('Job ref'), el('input',{id:'ref_jobref',class:'input',placeholder:'JOB123'}) ]),
+              el('label',{},[ document.createTextNode('Quote total (£)'), el('input',{id:'ref_quote',class:'input',type:'number',placeholder:'1200'}) ]),
+              el('div',{style:'height:8px'}),
+              el('div',{class:'row'},[ el('button',{class:'chip',onclick:createReferral},[document.createTextNode('Create code')]) ])
+            ]),
+            el('div',{style:'height:12px'}),
+            el('div',{class:'card pad'},[
+              el('div',{class:'section-title',html:'Redeem referral'}),
+              el('label',{},[ document.createTextNode('Client name (referee)'), el('input',{id:'redeem_name',class:'input',placeholder:'Client name'}) ]),
+              el('label',{},[ document.createTextNode('Code'), el('input',{id:'redeem_code',class:'input',placeholder:'CODE123'}) ]),
+              el('div',{style:'height:8px'}), el('div',{class:'row'},[ el('button',{class:'chip',onclick:redeemReferral},[document.createTextNode('Apply code')]) ])
+            ])
+          ]),
+          el('div',{},[
+            el('div',{class:'card pad'},[
+              el('div',{class:'section-title',html:'Recent referrals'}),
+              el('div',{id:'refList'})
+            ])
+          ])
+        ])
+      ]);
+      view.appendChild(container);
+
+      function renderList(){
+        const wrap = document.getElementById('refList'); wrap.innerHTML = '';
+        const items = db.referrals || [];
+        if(!items.length) { wrap.append(el('div',{class:'empty',html:'No referrals yet'})); return; }
+        items.slice().reverse().forEach(r=>{
+          const used = r.used ? `<span class="chip" style="background:var(--nav-hover)">Used</span>` : `<span class="chip" style="background:rgba(1,250,191,.12)">Available</span>`;
+          const row = el('div',{class:'card pad',style:'margin-bottom:8px'},[
+            el('div',{html:`<strong>${r.clientName}</strong> • ${r.jobRef} • ${r.quoteTotal ? '£'+r.quoteTotal : ''}`}),
+            el('div',{style:'height:6px'}),
+            el('div',{html:`Code: <strong>${r.code}</strong> • ${used}`})
+          ]);
+          wrap.append(row);
+        });
+      }
+
+      function createReferral(){
+        const name = (document.getElementById('ref_name')||{}).value || '';
+        const job = (document.getElementById('ref_jobref')||{}).value || '';
+        const quote = (document.getElementById('ref_quote')||{}).value || '';
+        if(!name || !job || !quote){ showToast('All fields required'); return; }
+        const code = 'EW' + Math.random().toString(36).substring(2,8).toUpperCase();
+        const entry = { id: crypto.randomUUID(), clientName: name, jobRef: job, quoteTotal: Number(quote), code, used: false, createdAt: (new Date()).toISOString() };
+        db.referrals = db.referrals || [];
+        db.referrals.push(entry); persist(); renderList(); if(window.EL_FIREBASE) EL_FIREBASE.backupNow(); showToast('Referral created: ' + code);
+      }
+
+      function redeemReferral(){
+        const name = (document.getElementById('redeem_name')||{}).value || '';
+        const code = (document.getElementById('redeem_code')||{}).value || '';
+        if(!name || !code){ showToast('Enter name and code'); return; }
+        const list = db.referrals || [];
+        const entry = list.find(r=> r.code === code);
+        if(!entry){ showToast('Code not found'); return; }
+        if(entry.used){ showToast('Code already used'); return; }
+        // Mark used and apply discounts: store a simple refund/usage record
+        entry.used = true; entry.usedBy = name; entry.usedAt = (new Date()).toISOString();
+        // For bookkeeping: we store referee refund and referrer discount details
+        entry.refereeRefund = +(entry.quoteTotal || 0) * 0.10; // 10% refunded to referee
+        entry.referrerCredit = +(entry.quoteTotal || 0) * 0.10; // 10% credited to referrer
+        persist(); renderList(); if(window.EL_FIREBASE) EL_FIREBASE.backupNow(); showToast('Code applied — ' + (entry.refereeRefund ? '£'+entry.refereeRefund.toFixed(2)+' refunded' : 'Applied'));
+      }
+
+      renderList();
     }
     // --- EMAIL VIEW ---
 
