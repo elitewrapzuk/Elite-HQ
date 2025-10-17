@@ -462,6 +462,29 @@
       Store.set('ew_projects', db.projects);
       Store.set('ew_suppliers', db.suppliers);
       Store.set('ew_calendar', db.calendarEvents);
+      // Mirror local changes to Firestore for cross-device backups (safe no-op if Firebase not ready)
+      try{
+        // simple debounce to avoid frequent writes
+        if(!window._ew_lastBackupAt) window._ew_lastBackupAt = 0;
+        const now = Date.now();
+        if(now - window._ew_lastBackupAt > 3000){
+          window._ew_lastBackupAt = now;
+          if(window.FirebaseHelpers && typeof window.FirebaseHelpers.saveHQData === 'function'){
+            // fire-and-forget backup; merge on server via setDoc in saveHQData
+            window.FirebaseHelpers.saveHQData({
+              links: db.links,
+              contacts: db.contacts,
+              projects: db.projects,
+              suppliers: db.suppliers,
+              calendarEvents: db.calendarEvents
+            }).then(()=>{
+              console.info('Auto-backup: elitehq/settings saved');
+            }).catch(err=>{
+              console.warn('Auto-backup failed', err);
+            });
+          }
+        }
+      }catch(e){ console.warn('Auto-backup attempt threw', e); }
     }
 
     /************ Icons (outline, inline) ************/
