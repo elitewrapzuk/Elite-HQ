@@ -318,6 +318,13 @@
       .close-mobile{display:block;position:absolute;top:12px;right:12px;background:transparent;border:none;font-size:20px;cursor:pointer;color:var(--muted)}
       .sidebar{padding-top:40px}
     }
+    
+    /* Email templates responsive styles */
+    @media (max-width: 980px) {
+      .email-templates-grid {
+        grid-template-columns: 1fr !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -333,7 +340,16 @@
   <a href="#/projects" data-route="projects"><span class="ico" data-ico="folder"></span>Projects</a>
   <a href="#/calendar" data-route="calendar"><span class="ico" data-ico="calendar"></span>Calendar</a>
   <a href="#/suppliers" data-route="suppliers"><span class="ico" data-ico="shield"></span>Suppliers</a>
-  <a href="#/email" data-route="email"><span class="ico" data-ico="mail"></span>Email</a>
+  <div class="nav-group" data-group="email">
+    <button class="nav-group-header" type="button" aria-expanded="false">
+      <span class="left"><span class="ico" data-ico="mail"></span><span>Email</span></span>
+      <span class="chev">▾</span>
+    </button>
+    <div class="nav-sub" id="navEmail">
+      <a href="#/email" data-route="email" class="sub"><span class="ico" data-ico="mail"></span>New Email</a>
+      <a href="#/email-templates" data-route="email-templates" class="sub"><span class="ico" data-ico="doc"></span>Templates</a>
+    </div>
+  </div>
   <div class="nav-group" data-group="quotes">
     <button class="nav-group-header" type="button" aria-expanded="false">
       <span class="left"><span class="ico" data-ico="doc"></span><span>Quotes</span></span>
@@ -562,7 +578,7 @@
     }
 
     /************ Router ************/
-  const routes = { dashboard: renderDashboard, contacts: renderContacts, projects: renderProjects, calendar: renderCalendar, suppliers: renderSuppliers, email: renderEmail, quote: renderQuote, optimiser: renderOptimiser, signatures: renderSignatures, 'remote-sign': renderRemoteSign, 'remote-quote': renderRemoteQuote, settings: renderSettings };
+  const routes = { dashboard: renderDashboard, contacts: renderContacts, projects: renderProjects, calendar: renderCalendar, suppliers: renderSuppliers, email: renderEmail, 'email-templates': renderEmailTemplates, quote: renderQuote, optimiser: renderOptimiser, signatures: renderSignatures, 'remote-sign': renderRemoteSign, 'remote-quote': renderRemoteQuote, settings: renderSettings };
 
     // External tool embed helper
     function embedExternal(url, title){
@@ -659,6 +675,285 @@
           else showToast('Send failed');
         } catch(e){ showToast('Send error'); }
       });
+    }
+
+    // --- EMAIL TEMPLATES VIEW ---
+    function renderEmailTemplates() {
+      const view = document.getElementById('view');
+      view.innerHTML = '';
+      
+      const container = document.createElement('div');
+      container.className = 'container';
+      container.innerHTML = `
+        <div class="email-templates-grid" style="display: grid; grid-template-columns: 1.1fr 1fr; gap: 24px; margin-top: 0;">
+          <!-- Left: Form -->
+          <section class="card pad">
+            <h3 style="margin-top: 0; font-size: 18px; font-weight: 700;">Client & Template</h3>
+
+            <!-- Client Details -->
+            <div style="margin-bottom: 18px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;" for="clientName">Client Name</label>
+              <input class="input" type="text" id="clientName" placeholder="Enter client first name">
+            </div>
+            <div style="margin-bottom: 18px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;" for="clientEmail">Client Email</label>
+              <input class="input" type="email" id="clientEmail" placeholder="Enter client email">
+            </div>
+
+            <!-- Template Selection -->
+            <div style="margin-bottom: 18px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;" for="templateSelect">Select Template</label>
+              <select class="input" id="templateSelect">
+                <option value="">-- Choose a template --</option>
+              </select>
+            </div>
+
+            <!-- Extra Fields for Deposit Request -->
+            <div id="depositFields" class="extraFields" style="display: none; margin-top: 14px; padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface);">
+              <h4 style="margin: 0 0 14px 0;">Deposit Request Details</h4>
+              <div style="margin-bottom: 18px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;" for="quoteTotal_deposit">Quote Total (£)</label>
+                <input class="input" type="number" id="quoteTotal_deposit">
+              </div>
+              <div style="margin-bottom: 18px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;" for="depositTotal_deposit">Deposit Total (£)</label>
+                <input class="input" type="number" id="depositTotal_deposit">
+              </div>
+              <div style="margin-bottom: 18px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;" for="paymentLink_deposit">Payment Link</label>
+                <input class="input" type="url" id="paymentLink_deposit" placeholder="https://…">
+              </div>
+            </div>
+
+            <!-- Extra Fields for Quote Sent -->
+            <div id="quoteSentFields" class="extraFields" style="display: none; margin-top: 14px; padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface);">
+              <h4 style="margin: 0 0 14px 0;">Quote Sent Details</h4>
+              <div style="margin-bottom: 18px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;" for="quoteTotal_quote">Quote Total (£)</label>
+                <input class="input" type="number" id="quoteTotal_quote">
+              </div>
+              <div style="margin-bottom: 18px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;" for="depositTotal_quote">Deposit Total (£)</label>
+                <input class="input" type="number" id="depositTotal_quote">
+              </div>
+            </div>
+
+            <!-- Extra Fields for Booking Confirmation -->
+            <div id="bookingFields" class="extraFields" style="display: none; margin-top: 14px; padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface);">
+              <h4 style="margin: 0 0 14px 0;">Booking Details</h4>
+              <div style="margin-bottom: 18px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;" for="bookingDate">Booking Date</label>
+                <input class="input" type="text" id="bookingDate" placeholder="e.g. 12th March 2025">
+              </div>
+              <div style="margin-bottom: 18px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;" for="bookingTime">Booking Time</label>
+                <input class="input" type="text" id="bookingTime" placeholder="e.g. 10:00 AM">
+              </div>
+            </div>
+
+            <!-- Extra Fields for Signature Request -->
+            <div id="signatureFields" class="extraFields" style="display: none; margin-top: 14px; padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface);">
+              <h4 style="margin: 0 0 14px 0;">Signature Request Details</h4>
+              <div style="margin-bottom: 18px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;" for="signatureLink">Signature Link</label>
+                <input class="input" type="url" id="signatureLink" placeholder="Paste signature link">
+              </div>
+              <div style="margin-bottom: 18px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;" for="agreementType">Agreement Type</label>
+                <select class="input" id="agreementType">
+                  <option value="Services Agreement">Services Agreement</option>
+                  <option value="Cooling-Off Waiver">14 Day Cooling-Off Waiver</option>
+                  <option value="Payment Plan Agreement">Payment Plan Agreement</option>
+                </select>
+              </div>
+            </div>
+          </section>
+
+          <!-- Right: Preview & Actions -->
+          <section class="card pad">
+            <h3 style="margin-top: 0; font-size: 18px; font-weight: 700;">Preview & Send</h3>
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: end; margin-bottom: 18px;">
+              <div style="margin: 0;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;" for="subjectPreview">Subject</label>
+                <input class="input" id="subjectPreview" type="text" placeholder="Subject will appear here" readonly>
+              </div>
+              <button class="btn" style="white-space: nowrap; padding: 10px 12px; font-size: 13px;" onclick="copySubject()">Copy subject</button>
+            </div>
+
+            <div style="margin-bottom: 18px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;" for="messageBox">Generated Message</label>
+              <textarea class="input" id="messageBox" rows="14" readonly></textarea>
+            </div>
+
+            <div style="display: flex; gap: 12px;">
+              <button class="btn" onclick="copyMessage()">📋 Copy to Clipboard</button>
+              <button class="btn primary" onclick="openEmail()">✉️ Open in Email App</button>
+            </div>
+          </section>
+        </div>
+      `;
+      
+      view.appendChild(container);
+
+      // Templates data
+      const templates = {
+        "Quote Sent": {
+          subject: "Your Elite Wrapz Quote",
+          body: "Hi {name},\\n\\nThank you for considering Elite Wrapz!\\n\\nYour total quote is {quoteTotal}, with a deposit of {depositTotal} required to secure your booking.\\n\\nPlease note:\\n- Quotes are valid for 30 days.\\n- To accept this quote, simply reply to this message.\\n- We offer a Price Match Guarantee with proof of an official business quote (letterhead or email with full breakdown).\\n- Discounts must be mentioned before your deposit is paid.\\n- Deposits are non-refundable unless otherwise stated in our terms.\\n\\nFull terms & conditions: https://elitewrapz.uk/termsandconditions\\n\\nBest regards,\\nThe Elite Wrapz Team"
+        },
+        "Quote Reminder": {
+          subject: "Following Up on Your Elite Wrapz Quote",
+          body: "Hi {name},\\n\\nJust checking in to see if you had a chance to review your quote from Elite Wrapz.\\n\\nIf you'd like to move forward, we'd love to get you booked in and secure your date. If you have any questions, feel free to reply anytime.\\n\\nBest regards,\\nThe Elite Wrapz Team"
+        },
+        "Deposit Request": {
+          subject: "Your Elite Wrapz Quote & Deposit Request",
+          body: "Hi {name},\\n\\nThank you for choosing Elite Wrapz!\\n\\nYour quote total is {quoteTotal}, with a deposit of {depositTotal} required to secure your booking. Please use the link below to pay your deposit:\\n\\n🔗 {paymentLink}\\n\\n⚠️ Please note:\\n- We can only hold your requested date for 24 hours without a deposit.\\n- All quotes are valid for 30 days.\\n- Any discount codes must be provided before your deposit is paid.\\n\\nFull terms: https://elitewrapz.uk/termsandconditions\\n\\nBest regards,\\nThe Elite Wrapz Team"
+        },
+        "Services Agreement": {
+          subject: "Elite Wrapz – Services Agreement Review",
+          body: "Hi {name},\\n\\nPlease find attached our Services Agreement for you to review.\\n\\nIf you're happy with everything, I can send you a secure link to provide your signature digitally. Alternatively, if we're meeting in person, I can collect your signature on the day.\\n\\nIf you have any questions, please let me know before signing.\\n\\nOnce signed, we'll be ready to move forward with your project.\\n\\nBest regards,\\nThe Elite Wrapz Team"
+        },
+        "Signature Request": {
+          subject: "Elite Wrapz has requested your signature – {agreementType}",
+          body: "Hi {name},\\n\\nWe've set up a secure link for you to digitally sign your {agreementType}.\\n\\nPlease click below to review and sign:\\n\\n🔗 {signatureLink}\\n\\nOnce signed, you'll receive a confirmation email and your copy of the signed document.\\n\\nIf you have any questions, let us know before completing the signature.\\n\\nBest regards,\\nThe Elite Wrapz Team"
+        },
+        "Booking Confirmation": {
+          subject: "Your Elite Wrapz Booking is Confirmed",
+          body: "Hi {name},\\n\\nWe're pleased to confirm your Elite Wrapz booking:\\n\\n📅 Date: {bookingDate}\\n⏰ Time: {bookingTime}\\n\\nBefore the day, please make sure all wrap areas are clear of items.\\n\\nYou'll also receive a final checklist email 1 day before we arrive.\\n\\nBest regards,\\nThe Elite Wrapz Team"
+        },
+        "Wrap Day Prep": {
+          subject: "Final Prep Before Your Wrap Day – Elite Wrapz",
+          body: "Hi {name},\\n\\nYour big vinyl-wrapping day is almost here, and we're just as excited as you are! Before we get started, here are a few quick notes to help things run smoothly:\\n\\n📦 Access & Parking\\nPlease let us know about any tricky gates, parking restrictions, or local surprises.\\n\\n🧹 Clear Surfaces\\nKindly make sure worktops and the surrounding area are clear. Insurance rules mean we can't move personal items.\\n\\n🐾 Pets & Safety\\nPlease keep pets and little ones away from the workspace during installation.\\n\\n🧴 Cleaning & Primer\\nWe use strong cleaning agents and a primer before wrapping. If anyone in your household is pregnant, sensitive to strong smells, or you'd prefer us not to use these, please let us know in advance. The primer smell is temporary and fades quickly, but the cleaner lingers a little longer.\\n\\n⏳ All-Day Job\\nWrapping can take most of the day depending on your kitchen. If you need to pop out, that's no problem—just please ensure someone is back home for the final handover.\\n\\n💳 Payments\\nIf there are any outstanding payments, now's the time to get those squared away.\\n\\nWe're looking forward to making your kitchen look amazing!\\nBest regards,\\nElite Wrapz Team"
+        },
+        "Thank You & Reviews": {
+          subject: "Thank You for Choosing Elite Wrapz – Share Your Thoughts",
+          body: "Hi {name},\\n\\nWe just wanted to say a huge thank you for choosing Elite Wrapz to transform your space – we hope you love the results!\\n\\nYour feedback means the world to us and helps others discover what we do. Please leave us a review:\\n\\n⭐ Google: https://share.google/JaMpIl01UkDLu8Qhx\\n⭐ Trustpilot: https://uk.trustpilot.com/review/elitewrapz.uk\\n⭐ Facebook: https://www.facebook.com/share/1ChEa8KkqQ/?mibextid=\\n\\n💡 Leave a review on all three and you'll receive 20% off your next wrap as a thank you!\\n\\nBest regards,\\nThe Elite Wrapz Team"
+        }
+      };
+
+      const select = document.getElementById("templateSelect");
+      const messageBox = document.getElementById("messageBox");
+      const subjectPreview = document.getElementById("subjectPreview");
+
+      // Initialize template dropdown
+      function refreshTemplateList() {
+        select.innerHTML = '<option value="">-- Choose a template --</option>';
+        const order = [
+          "Quote Sent",
+          "Quote Reminder", 
+          "Deposit Request",
+          "Services Agreement",
+          "Signature Request",
+          "Booking Confirmation",
+          "Wrap Day Prep",
+          "Thank You & Reviews"
+        ];
+        order.forEach(name => {
+          if (templates[name]) {
+            const option = document.createElement("option");
+            option.value = name;
+            option.textContent = name;
+            select.appendChild(option);
+          }
+        });
+      }
+
+      refreshTemplateList();
+
+      // Update message when inputs change
+      function updateMessage() {
+        const name = document.getElementById("clientName").value || "Customer";
+        const selected = select.value;
+        if (selected && templates[selected]) {
+          let msg = templates[selected].body.replace(/\\\\n/g, '\\n').replace("{name}", name);
+          let subject = templates[selected].subject;
+
+          if (selected === "Deposit Request") {
+            let q = document.getElementById("quoteTotal_deposit").value;
+            let d = document.getElementById("depositTotal_deposit").value;
+            const l = document.getElementById("paymentLink_deposit").value || "[Insert Link]";
+            const quote = q ? `£${q}` : "____";
+            const deposit = d ? `£${d}` : "____";
+            msg = msg.replace("{quoteTotal}", quote)
+                     .replace("{depositTotal}", deposit)
+                     .replace("{paymentLink}", l);
+          }
+
+          if (selected === "Quote Sent") {
+            let q = document.getElementById("quoteTotal_quote").value;
+            let d = document.getElementById("depositTotal_quote").value;
+            const quote = q ? `£${q}` : "____";
+            const deposit = d ? `£${d}` : "____";
+            msg = msg.replace("{quoteTotal}", quote)
+                     .replace("{depositTotal}", deposit);
+          }
+
+          if (selected === "Booking Confirmation") {
+            const date = document.getElementById("bookingDate").value || "____";
+            const time = document.getElementById("bookingTime").value || "____";
+            msg = msg.replace("{bookingDate}", date)
+                     .replace("{bookingTime}", time);
+          }
+
+          if (selected === "Signature Request") {
+            const link = document.getElementById("signatureLink").value || "[Insert Link]";
+            const agreement = document.getElementById("agreementType").value || "Agreement";
+            msg = msg.replace("{signatureLink}", link)
+                     .replace(/{agreementType}/g, agreement);
+            subject = subject.replace("{agreementType}", agreement);
+          }
+
+          messageBox.value = msg;
+          messageBox.dataset.subject = subject;
+          if (subjectPreview) subjectPreview.value = subject;
+        } else {
+          messageBox.value = "";
+          if (subjectPreview) subjectPreview.value = "";
+        }
+      }
+
+      // Event listeners
+      select.addEventListener("change", function() {
+        document.querySelectorAll(".extraFields").forEach(div => div.style.display = "none");
+        if (this.value === "Deposit Request") document.getElementById("depositFields").style.display = "block";
+        if (this.value === "Quote Sent") document.getElementById("quoteSentFields").style.display = "block";
+        if (this.value === "Booking Confirmation") document.getElementById("bookingFields").style.display = "block";
+        if (this.value === "Signature Request") document.getElementById("signatureFields").style.display = "block";
+        updateMessage();
+      });
+
+      document.querySelectorAll("input, select").forEach(input => {
+        input.addEventListener("input", updateMessage);
+      });
+
+      // Copy functions - making them global
+      window.copyMessage = function() {
+        if (!messageBox.value) return showToast('No message to copy!');
+        navigator.clipboard.writeText(messageBox.value)
+          .then(() => showToast('Message copied to clipboard!'))
+          .catch(() => showToast('Unable to access clipboard.'));
+      };
+
+      window.copySubject = function() {
+        const subject = messageBox.dataset.subject || '';
+        if (!subject) return showToast('No subject to copy.');
+        navigator.clipboard.writeText(subject)
+          .then(() => showToast('Subject copied!'))
+          .catch(() => showToast('Unable to access clipboard.'));
+      };
+
+      window.openEmail = function() {
+        const email = document.getElementById("clientEmail").value;
+        const selected = select.value;
+        if (!selected || !templates[selected]) return showToast('Please select a template first.');
+        const subject = messageBox.dataset.subject || templates[selected].subject;
+        const body = encodeURIComponent(messageBox.value);
+        if (email && body) {
+          window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${body}`;
+        } else {
+          showToast('Please enter the client email and select a template.');
+        }
+      };
     }
 
     /* Settings view */
