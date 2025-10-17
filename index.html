@@ -303,6 +303,16 @@
       .page-title{display:none}
     }
 
+    /* Settings responsive tweaks */
+    .settings-header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+    .settings-header .right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    #cloudUid{min-width:0;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    input.migrate-input{width:360px;max-width:calc(100% - 200px)}
+    @media (max-width:600px){
+      input.migrate-input{width:100%}
+      .settings-header .right{width:100%;justify-content:space-between}
+    }
+
     /* KEYFRAMES */
     @keyframes fade{from{opacity:0}to{opacity:1}}
 
@@ -1255,9 +1265,9 @@
       cfg.tags = (cfg.tags||[]).map(t => (typeof t === 'string') ? { name: t, color: '#01FABF' } : (t.name? t : { name: String(t), color: '#01FABF' }));
       const wrap = el('div',{},[
         // Add a prominent backup control at the top of Settings
-        el('div',{class:'card pad', style: 'display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px'},[
+        el('div',{class:'card pad settings-header', style: 'margin-bottom:12px'},[
           el('div',{style:'font-weight:800;font-size:16px'},[ document.createTextNode('Settings') ]),
-          el('div',{style:'display:flex;gap:8px;align-items:center'},[
+          el('div',{class:'right'},[
             el('button',{class:'chip',onclick:()=>{ if(window.EL_FIREBASE) EL_FIREBASE.backupNow(); else showToast('Firebase not ready'); }},[document.createTextNode('Backup now')]),
             el('div',{id:'cloudSyncStateTop',style:'font-size:13px;color:var(--muted);font-weight:600', title:'Cloud sync status'},[document.createTextNode('Cloud: —')]),
             // show current Firebase UID and quick migrate controls
@@ -1356,7 +1366,7 @@
           if(parentCard){
             const row = document.createElement('div'); row.style = 'margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
             row.innerHTML = `
-              <input class="input" id="migrateDocId" placeholder="Paste source backup doc id" style="width:360px" />
+              <input class="input migrate-input" id="migrateDocId" placeholder="Paste source backup doc id" />
               <button class="chip" id="doMigrateBtn">Merge backup</button>
               <button class="chip" id="previewMigrateBtn">Preview</button>
               <span class="muted" id="migrateStatus">&nbsp;</span>
