@@ -3010,6 +3010,41 @@
 
   window.FirebaseHelpers = { createReferral, listReferrals, getReferralByCode, useReferralCode, saveSignature, listTemplates, saveHQData, loadHQData };
       console.info('FirebaseHelpers initialized');
+      // After Firebase is ready - try to merge remote settings into local and push a backup
+      (async ()=>{
+        try{
+          const remote = await loadHQData();
+          const keys = ['links','contacts','projects','suppliers','calendarEvents'];
+          if(remote && remote.data){
+            let merged = false;
+            for(const k of keys){
+              if(Array.isArray(remote.data[k]) && (!db[k] || db[k].length===0)){
+                db[k] = remote.data[k];
+                merged = true;
+              }
+            }
+            if(merged){
+              persist();
+              console.info('Merged remote elitehq/settings into local db');
+            }
+          }
+
+          // Ensure we push current local state to Firestore now so contacts/projects/etc are backed up
+          if(window.FirebaseHelpers && typeof window.FirebaseHelpers.saveHQData === 'function'){
+            try{
+              await window.FirebaseHelpers.saveHQData({ links: db.links, contacts: db.contacts, projects: db.projects, suppliers: db.suppliers, calendarEvents: db.calendarEvents });
+              console.info('Initial backup: elitehq/settings saved');
+            }catch(e){ console.warn('Initial backup failed', e); }
+          }
+        }catch(e){ console.warn('Merge/load backup failed', e); }
+      })();
+
+      // Expose a manual backup helper for debugging and user-triggered backups
+      window.manualBackup = async function(){
+        if(!window.FirebaseHelpers || typeof window.FirebaseHelpers.saveHQData !== 'function') throw new Error('FirebaseHelpers not ready');
+        await window.FirebaseHelpers.saveHQData({ links: db.links, contacts: db.contacts, projects: db.projects, suppliers: db.suppliers, calendarEvents: db.calendarEvents });
+        console.info('Manual backup complete');
+      };
     }catch(e){ console.warn('Firebase init failed', e); }
   </script>
 </body>
