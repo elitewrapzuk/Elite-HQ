@@ -75,6 +75,11 @@
   .sidebar-footer a{display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;color:var(--ink);text-decoration:none;font-weight:700;border:1px solid transparent;background:transparent}
   .sidebar-footer a:hover{background:var(--nav-hover)}
   @media (max-width:980px){ .sidebar-footer{bottom:80px} }
+  /* Cloud adoption banner shown after auto-adopt/merge */
+  .cloud-banner{border-left:4px solid var(--brand);padding:12px 14px;margin-bottom:12px;border-radius:10px;background:var(--surface);display:flex;align-items:center;gap:12px}
+  .cloud-banner .msg{flex:1;font-weight:700}
+  .cloud-banner .actions{display:flex;gap:8px}
+  .cloud-banner .actions .btn{height:34px;padding:0 10px;border-radius:8px}
 
     /* TOP BAR (Glass) */
     .main{display:flex;flex-direction:column;min-width:0}
@@ -640,6 +645,7 @@
               // re-attach listener to the canonical doc
               try{ attachDocListener(fdb, newest.id); }catch(e){}
               showCloudStatus('Auto-adopted latest backup');
+              try{ showAdoptionBanner(newest.id); }catch(e){}
             }catch(e){ console.error('Auto-merge/adopt failed', e); }
           }
         }catch(e){ console.error('findLatestBackupAndMaybeImport failed', e); }
@@ -2350,6 +2356,22 @@
       );
       bd.append(modal); bd.style.display='flex';
       return { close: closeModal };
+    }
+
+    // show an adoption banner after auto-adopt so user is informed
+    function showAdoptionBanner(docId){
+      try{
+        const view = document.getElementById('view'); if(!view) return;
+        const existing = document.getElementById('cloudAdoptBanner'); if(existing) existing.remove();
+        const banner = el('div',{id:'cloudAdoptBanner',class:'cloud-banner'},[
+          el('div',{class:'msg',html:`Auto-adopted cloud backup: <strong>${docId}</strong>`}),
+          el('div',{class:'actions'},[
+            el('button',{class:'btn',onclick:()=>{ location.hash='#/settings'; document.getElementById('sidebar')?.classList.remove('open'); }},[document.createTextNode('Open Settings')]),
+            el('button',{class:'btn',onclick:()=>{ document.getElementById('cloudAdoptBanner')?.remove(); }},[document.createTextNode('Dismiss')])
+          ])
+        ]);
+        view.prepend(banner);
+      }catch(e){ console.error('showAdoptionBanner failed', e); }
     }
 
     /* Icon picker (used by Links) */
