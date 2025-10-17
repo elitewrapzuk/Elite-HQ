@@ -1259,7 +1259,13 @@
           el('div',{style:'font-weight:800;font-size:16px'},[ document.createTextNode('Settings') ]),
           el('div',{style:'display:flex;gap:8px;align-items:center'},[
             el('button',{class:'chip',onclick:()=>{ if(window.EL_FIREBASE) EL_FIREBASE.backupNow(); else showToast('Firebase not ready'); }},[document.createTextNode('Backup now')]),
-            el('div',{id:'cloudSyncStateTop',style:'font-size:13px;color:var(--muted);font-weight:600'},[document.createTextNode('Cloud: —')])
+            el('div',{id:'cloudSyncStateTop',style:'font-size:13px;color:var(--muted);font-weight:600', title:'Cloud sync status'},[document.createTextNode('Cloud: —')]),
+            // show current Firebase UID and quick migrate controls
+            el('div',{style:'display:flex;align-items:center;gap:8px;margin-left:8px'},[
+              el('div',{style:'font-size:12px;color:var(--muted);font-weight:600'},[document.createTextNode('UID:')]),
+              el('div',{id:'cloudUid',style:'font-weight:700;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},[document.createTextNode('—')]),
+              el('button',{class:'chip',id:'copyUidBtn',title:'Copy current UID'},[document.createTextNode('Copy')])
+            ])
           ])
         ]),
         el('div',{class:'card pad'},[
@@ -1325,7 +1331,59 @@
       ]);
       view.append(wrap);
 
-      
+      // --- Cloud UID and migration UI wiring (shows current anon UID and a small migrate tool) ---
+      (function setupSettingsCloudUI(){
+        // refresh UID display if firebase is available
+        const cloudUidEl = document.getElementById('cloudUid');
+        const copyUidBtn = document.getElementById('copyUidBtn');
+        function refreshCloudStatus(){
+          try{
+            if(window.firebase && firebase.auth && firebase.auth().currentUser){
+              const u = firebase.auth().currentUser.uid || '—';
+              if(cloudUidEl) cloudUidEl.textContent = u;
+              if(copyUidBtn) copyUidBtn.onclick = ()=>{ navigator.clipboard.writeText(u).then(()=> showToast('UID copied')); };
+            } else {
+              if(cloudUidEl) cloudUidEl.textContent = '—';
+              if(copyUidBtn) copyUidBtn.onclick = ()=> showToast('Not signed in yet');
+            }
+          }catch(e){ /* ignore */ }
+        }
+        refreshCloudStatus();
+
+        // insert migration controls (id input + preview + merge)
+        try{
+          const parentCard = document.querySelector('.card.pad [id="cloudSyncStateTop"]')?.closest('.card');
+          if(parentCard){
+            const row = document.createElement('div'); row.style = 'margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
+            row.innerHTML = `
+              <input class="input" id="migrateDocId" placeholder="Paste source backup doc id" style="width:360px" />
+              <button class="chip" id="doMigrateBtn">Merge backup</button>
+              <button class="chip" id="previewMigrateBtn">Preview</button>
+              <span class="muted" id="migrateStatus">&nbsp;</span>
+            `;
+            parentCard.appendChild(row);
+            const btn = document.getElementById('doMigrateBtn');
+            const preview = document.getElementById('previewMigrateBtn');
+            const input = document.getElementById('migrateDocId');
+            const status = document.getElementById('migrateStatus');
+            if(btn){ btn.addEventListener('click', async ()=>{
+              const id = input.value && input.value.trim(); if(!id) return showToast('Enter doc id');
+              status.textContent = 'Migrating...';
+              try{ await window.EL_FIREBASE.migrateFrom(id); status.textContent = 'Merged'; showToast('Migration finished'); refreshCloudStatus(); }
+              catch(e){ console.error(e); status.textContent = 'Failed'; showToast('Migration failed'); }
+            }); }
+            if(preview){ preview.addEventListener('click', async ()=>{
+              const id = input.value && input.value.trim(); if(!id) return showToast('Enter doc id');
+              status.textContent = 'Fetching...';
+              try{
+                const fdb = firebase.firestore(); const snap = await fdb.collection('backups').doc(id).get(); if(!snap.exists){ status.textContent='Not found'; return; }
+                const data = snap.data() || {}; const counts = ['contacts','projects','suppliers','referrals','calendarEvents'].map(k=> `${k}:${(data[k]||[]).length}` ).join(' • ');
+                status.textContent = counts; showToast('Preview loaded');
+              }catch(e){ console.error(e); status.textContent='Error'; showToast('Preview failed'); }
+            }); }
+          }
+        }catch(e){ /* ignore */ }
+      })();
 
       const logoFile = document.getElementById('logoFile');
       const settingsLogoImg = document.getElementById('settingsLogoImg');
