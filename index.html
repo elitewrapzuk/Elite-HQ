@@ -621,9 +621,30 @@
               // it's already attached via listener; nothing further required
               return;
             }
-            // Otherwise, auto-merge newest into the active user's backup
-            try{ await migrateFrom(newest.id); showCloudStatus('Auto-merged latest backup'); }
-            catch(e){ console.error('Auto-merge failed', e); }
+            // Otherwise, either auto-merge or confirm with the user depending on settings
+            try{
+              const shouldConfirm = Store.get('ew_auto_merge_confirm', true);
+              if(shouldConfirm){
+                // show a confirmation modal summarising counts and sample items
+                const previewHtmlParts = [];
+                ['contacts','projects','suppliers','referrals','calendarEvents'].forEach(k=>{
+                  const arr = newest.data[k] || [];
+                  const sample = arr.slice(0,3).map(it=>`<div style="padding:4px 0;border-bottom:1px dashed var(--line);font-size:13px">${(it && it.id)?it.id:(JSON.stringify(it).slice(0,60))}</div>`).join('');
+                  previewHtmlParts.push(`<div style="margin-bottom:8px"><strong>${k} (${arr.length})</strong>${sample?('<div style="margin-top:6px">'+sample+'</div>') : ''}</div>`);
+                });
+                const body = el('div',{html: `<div style="max-height:320px;overflow:auto">${previewHtmlParts.join('')}</div><div style="height:10px"></div><label style=\"display:flex;align-items:center;gap:8px\"><input type=\"checkbox\" id=\"skipAutoMergeToggle\" /> Don't ask again (auto-merge in future)</label>`});
+                openModal('Auto-merge latest backup?', body, ()=>{
+                  // if user checks skip, update preference
+                  try{ const skip = document.getElementById('skipAutoMergeToggle') && document.getElementById('skipAutoMergeToggle').checked; if(skip){ Store.set('ew_auto_merge_confirm', false); } }catch(e){}
+                  // run merge in background
+                  migrateFrom(newest.id).then(()=> showCloudStatus('Auto-merged latest backup')).catch(e=>{ console.error('Auto-merge failed', e); showCloudStatus('Auto-merge failed'); });
+                  return true;
+                }, 'Merge', { className:'wide' });
+              } else {
+                await migrateFrom(newest.id);
+                showCloudStatus('Auto-merged latest backup');
+              }
+            }catch(e){ console.error('Auto-merge failed', e); }
           }
         }catch(e){ console.error('findLatestBackupAndMaybeImport failed', e); }
       }
@@ -1485,6 +1506,8 @@
                 const preview = document.createElement('button'); preview.className='chip'; preview.textContent='Preview'; preview.addEventListener('click', ()=>{ showToast(counts); });
                 const merge = document.createElement('button'); merge.className='chip'; merge.textContent='Merge'; merge.addEventListener('click', async ()=>{ if(!confirm('Merge this doc into your active backup?')) return; try{ await window.EL_FIREBASE.migrateFrom(doc.id); showToast('Merged'); }catch(e){ console.error(e); showToast('Merge failed'); } });
                 actions.append(preview, merge);
+                // highlight the newest doc
+                if(docs[0] && doc.id === docs[0].id){ row.style.borderLeft = '4px solid var(--brand)'; }
                 row.append(left, actions);
                 backupList.appendChild(row);
               });
