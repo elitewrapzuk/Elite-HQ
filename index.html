@@ -491,6 +491,7 @@
 
       let firebaseReady = false;
       let fbDocRef = null;
+      let fbUnsubscribe = null; // store snapshot unsubscribe
       let suppressLocalSync = false;
       // simple debounce helper
       function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t = setTimeout(()=> fn(...a), ms); }; }
@@ -500,35 +501,49 @@
         const top = document.getElementById('cloudSyncStateTop'); if(top) top.textContent = txt;
       }
 
+      function attachDocListener(fdb, uid){
+        // detach previous listener if present
+        try{ if(typeof fbUnsubscribe === 'function') fbUnsubscribe(); }catch(e){}
+        fbDocRef = fdb.collection('backups').doc(uid);
+        fbUnsubscribe = fbDocRef.onSnapshot(snap => {
+          if(!snap.exists){ showCloudStatus('No cloud backup'); return; }
+          const data = snap.data() || {};
+          // apply remote -> local with suppress flag to avoid loops
+          suppressLocalSync = true;
+          try{
+            if(data.contacts) { Store.set('ew_contacts', data.contacts); db.contacts = data.contacts; }
+            if(data.projects) { Store.set('ew_projects', data.projects); db.projects = data.projects; }
+            if(data.suppliers) { Store.set('ew_suppliers', data.suppliers); db.suppliers = data.suppliers; }
+            if(data.referrals) { Store.set('ew_referrals', data.referrals); db.referrals = data.referrals; }
+            if(data.calendarEvents) { Store.set('ew_calendar', data.calendarEvents); db.calendarEvents = data.calendarEvents; }
+            persist();
+            showCloudStatus('Synced from cloud');
+          }catch(e){ console.error('Apply remote failed', e); showCloudStatus('Apply remote failed'); }
+          setTimeout(()=> suppressLocalSync = false, 500);
+        }, err => { console.error('Cloud listen err', err); showCloudStatus('Cloud listen error'); });
+      }
+
       function initFirebase(){
         try{
           if(!window.firebase) { showCloudStatus('Firebase SDK not loaded'); return; }
           firebase.initializeApp(FIREBASE_CONFIG);
           const auth = firebase.auth();
           const fdb = firebase.firestore();
-          auth.signInAnonymously().then(()=>{
-            const uid = auth.currentUser && auth.currentUser.uid ? auth.currentUser.uid : 'anonymous';
-            fbDocRef = fdb.collection('backups').doc(uid);
-            // listen for remote changes
-            fbDocRef.onSnapshot(snap => {
-              if(!snap.exists){ showCloudStatus('No cloud backup'); return; }
-              const data = snap.data() || {};
-              // apply remote -> local with suppress flag to avoid loops
-              suppressLocalSync = true;
-              try{
-                if(data.contacts) { Store.set('ew_contacts', data.contacts); db.contacts = data.contacts; }
-                if(data.projects) { Store.set('ew_projects', data.projects); db.projects = data.projects; }
-                if(data.suppliers) { Store.set('ew_suppliers', data.suppliers); db.suppliers = data.suppliers; }
-                if(data.referrals) { Store.set('ew_referrals', data.referrals); db.referrals = data.referrals; }
-                if(data.calendarEvents) { Store.set('ew_calendar', data.calendarEvents); db.calendarEvents = data.calendarEvents; }
-                persist();
-                showCloudStatus('Synced from cloud');
-              }catch(e){ console.error('Apply remote failed', e); showCloudStatus('Apply remote failed'); }
-              setTimeout(()=> suppressLocalSync = false, 500);
-            }, err => { console.error('Cloud listen err', err); showCloudStatus('Cloud listen error'); });
-            firebaseReady = true;
-            showCloudStatus('Connected');
-          }).catch(err => { console.error('Auth err', err); showCloudStatus('Auth error'); });
+
+          // Use onAuthStateChanged to ensure reads only happen after auth is established
+          auth.onAuthStateChanged(user => {
+            if(user){
+              const uid = user.uid;
+              // If we already have a listener for this uid, we're ready
+              if(fbDocRef && fbDocRef.id === uid && firebaseReady){ showCloudStatus('Connected'); return; }
+              attachDocListener(fdb, uid);
+              firebaseReady = true;
+              showCloudStatus('Connected');
+            } else {
+              // not signed-in yet — attempt anonymous sign-in
+              auth.signInAnonymously().catch(err => { console.error('Auth err', err); showCloudStatus('Auth error'); });
+            }
+          }, err => { console.error('Auth state listener error', err); showCloudStatus('Auth state error'); });
         }catch(e){ console.error(e); showCloudStatus('Init error'); }
       }
 
@@ -557,6 +572,7 @@
             if(data.contacts) { Store.set('ew_contacts', data.contacts); db.contacts = data.contacts; }
             if(data.projects) { Store.set('ew_projects', data.projects); db.projects = data.projects; }
             if(data.suppliers) { Store.set('ew_suppliers', data.suppliers); db.suppliers = data.suppliers; }
+            if(data.referrals) { Store.set('ew_referrals', data.referrals); db.referrals = data.referrals; }
             if(data.calendarEvents) { Store.set('ew_calendar', data.calendarEvents); db.calendarEvents = data.calendarEvents; }
             persist();
             showCloudStatus('Restored from cloud — reloading');
