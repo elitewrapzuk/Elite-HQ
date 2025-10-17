@@ -3047,49 +3047,107 @@
         return { id: r.id, ...rec };
       }
 
-      // Save/load general Elite-HQ settings/document to Firestore under collection 'elitehq' doc 'settings'
+      // Save/load general Elite-HQ data. We store each top-level page as its own
+      // document under collection 'elitehq' (docs: links, contacts, projects,
+      // suppliers, calendar, referrals). Each document shape is:
+      // { data: <array|object>, updatedAt: <Firestore Timestamp> }
+      // For compatibility we return an object like: { data: { links: {...}, ... }, updatedAt: <ISO string|null> }
       // Note: This is a simple client-side helper. For sensitive operations, use authenticated/secured endpoints and Firestore rules.
-      async function saveHQData(data){
-        const ref = doc(db, 'elitehq', 'settings');
-        await setDoc(ref, { data: data || {}, updatedAt: serverTimestamp() }, { merge: true });
+      async function saveHQData(payload){
+        // If no payload provided, build it from local in-memory db and the referrals collection
+        if(!payload || typeof payload !== 'object'){
+          payload = {
+            links: db.links || [],
+            contacts: db.contacts || [],
+            projects: db.projects || [],
+            suppliers: db.suppliers || [],
+            calendarEvents: db.calendarEvents || []
+          };
+          // gather referrals from the 'referrals' collection so we mirror that data into elitehq/referrals
+          try{
+            const snap = await getDocs(collection(db,'referrals'));
+            payload.referrals = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          }catch(e){ console.warn('saveHQData: failed to read referrals collection', e); payload.referrals = null; }
+        }
+
+        const keys = Object.keys(payload);
+        const ops = [];
+        for(const k of keys){
+          try{
+            const ref = doc(db, 'elitehq', k);
+            // write per-doc with server timestamp
+            ops.push(setDoc(ref, { data: payload[k], updatedAt: serverTimestamp() }, { merge: true }));
+          }catch(e){ console.warn('saveHQData write queued failed for',k,e); }
+        }
+        await Promise.all(ops);
         return true;
       }
 
       async function loadHQData(){
-        const ref = doc(db, 'elitehq', 'settings');
-        const snap = await getDoc(ref);
-        if(!snap.exists()) return null;
-        return snap.data();
+        // Read the standard set of docs and return a compatibility object
+        const keys = ['links','contacts','projects','suppliers','calendarEvents','calendar','referrals'];
+        const out = { data: {} };
+        let latest = null;
+        for(const k of keys){
+          try{
+            const ref = doc(db, 'elitehq', k);
+            const snap = await getDoc(ref);
+            if(!snap.exists()){ out.data[k] = null; continue; }
+            const d = snap.data() || {};
+            // convert updatedAt to ISO if it's a Firestore Timestamp
+            let updatedAtIso = null;
+            if(d.updatedAt){
+              if(d.updatedAt.toDate && typeof d.updatedAt.toDate === 'function'){
+                updatedAtIso = d.updatedAt.toDate().toISOString();
+              } else if(typeof d.updatedAt === 'string'){
+                updatedAtIso = d.updatedAt;
+              }
+            }
+            out.data[k] = { data: d.data === undefined ? null : d.data, updatedAt: updatedAtIso };
+            if(updatedAtIso){
+              const t = Date.parse(updatedAtIso);
+              if(!Number.isNaN(t) && (!latest || t > latest)) latest = t;
+            }
+          }catch(e){ console.warn('loadHQData read failed for',k,e); out.data[k] = null; }
+        }
+        out.updatedAt = latest ? new Date(latest).toISOString() : null;
+        return out;
       }
 
       async function listTemplates(){ const snap = await getDocs(collection(db,'templates')); return snap.docs.map(d=>({ id:d.id, ...d.data() })); }
 
   window.FirebaseHelpers = { createReferral, listReferrals, getReferralByCode, useReferralCode, saveSignature, listTemplates, saveHQData, loadHQData };
       console.info('FirebaseHelpers initialized');
-      // After Firebase is ready - try to merge remote settings into local and push a backup
+      // After Firebase is ready - try to merge remote docs into local and push a backup
       (async ()=>{
         try{
           const remote = await loadHQData();
-          const keys = ['links','contacts','projects','suppliers','calendarEvents'];
+          const keys = ['links','contacts','projects','suppliers','calendarEvents','referrals'];
           if(remote && remote.data){
             let merged = false;
             for(const k of keys){
-              if(Array.isArray(remote.data[k]) && (!db[k] || db[k].length===0)){
-                db[k] = remote.data[k];
+              const docObj = remote.data[k];
+              // docObj may be { data: [...] , updatedAt: iso } or null
+              const arr = docObj && Array.isArray(docObj.data) ? docObj.data : null;
+              // merge only when local is empty to avoid overwriting user's current data
+              if(arr && (!db[k] || (Array.isArray(db[k]) && db[k].length===0))){
+                // map calendar -> calendarEvents if necessary
+                if(k === 'calendar' && Array.isArray(arr)) db.calendarEvents = arr;
+                else if(k === 'calendarEvents') db.calendarEvents = arr;
+                else if(k === 'referrals') {
+                  // referrals are not part of local db model; ignore merging into db but keep for initial backup
+                } else if(k in db){ db[k] = arr; }
                 merged = true;
               }
             }
-            if(merged){
-              persist();
-              console.info('Merged remote elitehq/settings into local db');
-            }
+            if(merged){ persist(); console.info('Merged remote elitehq docs into local db'); }
           }
 
           // Ensure we push current local state to Firestore now so contacts/projects/etc are backed up
           if(window.FirebaseHelpers && typeof window.FirebaseHelpers.saveHQData === 'function'){
             try{
               await window.FirebaseHelpers.saveHQData({ links: db.links, contacts: db.contacts, projects: db.projects, suppliers: db.suppliers, calendarEvents: db.calendarEvents });
-              console.info('Initial backup: elitehq/settings saved');
+              console.info('Initial backup: elitehq docs saved');
             }catch(e){ console.warn('Initial backup failed', e); }
           }
         }catch(e){ console.warn('Merge/load backup failed', e); }
@@ -3098,7 +3156,7 @@
       // Expose a manual backup helper for debugging and user-triggered backups
       window.manualBackup = async function(){
         if(!window.FirebaseHelpers || typeof window.FirebaseHelpers.saveHQData !== 'function') throw new Error('FirebaseHelpers not ready');
-        await window.FirebaseHelpers.saveHQData({ links: db.links, contacts: db.contacts, projects: db.projects, suppliers: db.suppliers, calendarEvents: db.calendarEvents });
+        await window.FirebaseHelpers.saveHQData();
         console.info('Manual backup complete');
       };
     }catch(e){ console.warn('Firebase init failed', e); }
