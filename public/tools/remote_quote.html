@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Remote Quote (embed)</title>
+  <style>
+    body{font-family:Inter,system-ui,Arial;margin:8px}
+    .card{background:var(--surface);border:1px solid var(--line);padding:12px;border-radius:10px}
+    .btn{cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h3>Remote Quote Form</h3>
+    <label>First name:<input id="rq_first"></label>
+    <label>Last name:<input id="rq_last"></label>
+    <label>Phone:<input id="rq_phone"></label>
+    <label>Email:<input id="rq_email"></label>
+    <label>Services:<select id="rq_services"><option>Kitchen Worktop Wrapping</option><option>Other</option></select></label>
+    <label>Details:<textarea id="rq_details" rows="4"></textarea></label>
+    <div style="margin-top:8px"><button id="rq_submit">Submit</button></div>
+    <div id="rq_out" style="margin-top:8px"></div>
+  </div>
+  <script>
+    document.getElementById('rq_submit').addEventListener('click', ()=>{
+      const data={first:document.getElementById('rq_first').value,last:document.getElementById('rq_last').value,email:document.getElementById('rq_email').value,phone:document.getElementById('rq_phone').value,details:document.getElementById('rq_details').value};
+      localStorage.setItem('remote_quote_'+Date.now(), JSON.stringify(data));
+      document.getElementById('rq_out').textContent='Saved (demo)';
+    });
+  </script>
+</body>
+</html>

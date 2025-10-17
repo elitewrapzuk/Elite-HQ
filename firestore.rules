@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Top-level elitehq/settings doc: allow read to anyone, writes only to authenticated users with limited fields
+    match /elitehq/settings {
+      allow read: if true;
+      allow write: if request.auth != null &&
+        // Prevent overwriting arbitrary fields: only allow 'data' object and 'updatedAt' serverTimestamp
+        request.resource.data.keys().hasOnly(['data', 'updatedAt']) &&
+        // Enforce 'data' to be a map
+        request.resource.data.data is map;
+    }
+
+    // Referrals collection: read allowed, create allowed for authenticated users only, update of 'used' must be via server-side function
+    match /referrals/{referralId} {
+      allow read: if true;
+
+      // Create new referral only when authenticated (or via restricted server account)
+      allow create: if request.auth != null &&
+        request.resource.data.keys().hasOnly(['referralCode','clientName','jobRef','jobTotal','used','createdAt']) &&
+        request.resource.data.referralCode is string &&
+        request.resource.data.clientName is string &&
+        request.resource.data.jobRef is string &&
+        (request.resource.data.jobTotal is number || request.resource.data.jobTotal is int) &&
+        request.resource.data.used is bool;
+
+      // Updates are restricted: clients cannot flip `used` to true — only allow updates that do NOT change 'used'
+      allow update: if request.auth != null &&
+        // If 'used' is present in the request, it must remain equal to the existing value (clients cannot change it)
+        (!(request.resource.data.keys().hasAny(['used'])) || request.resource.data.used == resource.data.used) &&
+        // Allow other non-sensitive fields to be updated (e.g., clientName or jobRef), but limit allowed keys
+        request.resource.data.keys().hasOnly(['referralCode','clientName','jobRef','jobTotal','used','usedBy','usedDate','createdAt']);
+
+      // Deletes are not allowed from client SDK
+      allow delete: if false;
+    }
+
+    // Signatures: allow create by authenticated users (or server) and reads public
+    match /signatures/{sigId} {
+      allow read: if true;
+      allow create: if request.auth != null &&
+        request.resource.data.keys().hasOnly(['name','email','address','ref','reason','signatureDataUrl','ip','createdAt']) &&
+        request.resource.data.name is string &&
+        request.resource.data.signatureDataUrl is string;
+      allow update, delete: if false;
+    }
+
+    // Templates: read publicly, create/update only to authenticated
+    match /templates/{tid} {
+      allow read: if true;
+      allow create, update: if request.auth != null;
+      allow delete: if false;
+    }
+
+    // Fallback: deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

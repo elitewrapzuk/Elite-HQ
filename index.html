@@ -42,6 +42,7 @@
 
     *{box-sizing:border-box}
     html,body{height:100%;margin:0;background:var(--bg);font-family:Inter,system-ui,Segoe UI,Arial,sans-serif;color:var(--ink)}
+
     body{transition:background .3s ease,color .3s ease}
     .app{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
 
@@ -333,7 +334,17 @@
   <a href="#/projects" data-route="projects"><span class="ico" data-ico="folder"></span>Projects</a>
   <a href="#/calendar" data-route="calendar"><span class="ico" data-ico="calendar"></span>Calendar</a>
   <a href="#/suppliers" data-route="suppliers"><span class="ico" data-ico="shield"></span>Suppliers</a>
-  <a href="#/email" data-route="email"><span class="ico" data-ico="mail"></span>Email</a>
+  <a href="#/referrals" data-route="referrals"><span class="ico" data-ico="gift"></span>Referrals</a>
+  <div class="nav-group" data-group="email">
+    <button class="nav-group-header" type="button" aria-expanded="false">
+      <span class="left"><span class="ico" data-ico="mail"></span><span>Email</span></span>
+      <span class="chev">▾</span>
+    </button>
+    <div class="nav-sub" id="navEmail">
+      <a href="#/create-email" data-route="create-email" class="sub"><span class="ico" data-ico="mail"></span>Create Email</a>
+      <a href="#/templates" data-route="templates" class="sub"><span class="ico" data-ico="doc"></span>Templates</a>
+    </div>
+  </div>
   <div class="nav-group" data-group="quotes">
     <button class="nav-group-header" type="button" aria-expanded="false">
       <span class="left"><span class="ico" data-ico="doc"></span><span>Quotes</span></span>
@@ -562,55 +573,795 @@
     }
 
     /************ Router ************/
-  const routes = { dashboard: renderDashboard, contacts: renderContacts, projects: renderProjects, calendar: renderCalendar, suppliers: renderSuppliers, email: renderEmail, quote: renderQuote, optimiser: renderOptimiser, signatures: renderSignatures, 'remote-sign': renderRemoteSign, 'remote-quote': renderRemoteQuote, settings: renderSettings };
+  const routes = { dashboard: renderDashboard, contacts: renderContacts, projects: renderProjects, calendar: renderCalendar, suppliers: renderSuppliers, referrals: renderReferrals, 'create-email': renderEmail, templates: renderTemplates, quote: renderQuote, optimiser: renderOptimiser, signatures: renderSignatures, 'remote-sign': renderRemoteSign, 'remote-quote': renderRemoteQuote, settings: renderSettings };
 
-    // External tool embed helper
-    function embedExternal(url, title){
+    // Local embed helper: fetch a local tool HTML and inject its content into the SPA view
+    async function embedLocal(relativePath, title){
       const view = document.getElementById('view');
       view.innerHTML = '';
-      const frameWrap = document.createElement('div');
-      frameWrap.className = 'card pad';
-      frameWrap.innerHTML = `
-        <div class="section-title">${title||''}</div>
-        <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)">
-          <iframe src="${url}" style="width:100%;height:78vh;border:0;background:#fff" loading="eager" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
-        </div>
-      `;
-      view.appendChild(frameWrap);
-      return frameWrap;
+      const card = el('div',{class:'card pad'},[]);
+      card.append(el('div',{class:'section-title',html:title||''}));
+      const wrap = el('div',{},[]);
+      view.appendChild(card);
+      try{
+        const res = await fetch(relativePath);
+        const txt = await res.text();
+        // Extract body content
+        const m = txt.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+        const content = m ? m[1] : txt;
+        wrap.innerHTML = content;
+        card.append(wrap);
+        // Execute any inline scripts by creating script elements
+        const scripts = wrap.querySelectorAll('script');
+        scripts.forEach(s=>{
+          const sc = document.createElement('script');
+          if(s.src) sc.src = s.src;
+          else sc.textContent = s.textContent;
+          document.body.appendChild(sc);
+          sc.onload = () => sc.remove();
+        });
+      }catch(e){ wrap.innerHTML = `<div class="hint">Failed to load tool: ${e.message}</div>`; card.append(wrap); }
+      return card;
     }
 
-    // Embedded Tools
+    // Local inline Tools (replace iframe embeds) — lightweight implementations
     function renderQuote(){
-      embedExternal('https://elitewrapzuk.github.io/elitequoter/', 'New Quote');
+      const appView = document.getElementById('view');
+      appView.innerHTML = '';
+      const container = el('div',{class:'card pad'});
+
+      const markup = `
+        <style>
+          /* Quoter styles (scoped minimal) */
+          .q-body{ font-family: Arial, sans-serif; background:transparent; color:var(--ink); margin:0; padding:0 }
+          .q-card{ background:#fff; border-radius:8px; padding:20px; margin-bottom:20px; box-shadow:0 2px 6px rgba(0,0,0,0.06) }
+          .q-card h2{ color:#00a884; font-size:1.15em; margin-top:0 }
+          .q-form-group{ margin-bottom:12px }
+          .q-form-group label{ display:block; margin-bottom:4px; font-size:0.9em }
+          .q-input, .q-textarea, .q-select{ width:100%; padding:10px; font-size:1em; border:1px solid #ccc; border-radius:4px; box-sizing:border-box }
+          .q-textarea{ min-height:80px }
+          .q-btn{ background:#00a884; color:#fff; padding:12px 18px; font-size:1em; border:none; border-radius:6px; cursor:pointer }
+          .q-btn:hover{ background:#008f72 }
+          .q-modal{ display:none; position:fixed; z-index:1200; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5) }
+          .q-modal .q-modal-content{ background:#fff; margin:8% auto; border-radius:10px; width:90%; max-width:560px; box-shadow:0 4px 12px rgba(0,0,0,0.12); overflow:hidden }
+          .q-modal-header{ background:#00a884; color:#fff; padding:12px; font-weight:bold; text-align:center }
+          .q-modal-body{ padding:20px }
+          .q-close{ float:right; font-size:22px; font-weight:bold; color:#fff; cursor:pointer }
+        </style>
+
+        <div class="q-body">
+          <!-- logo removed intentionally -->
+
+          <form id="quoteForm">
+            <div class="q-card">
+              <h2>Client Info</h2>
+              <div class="q-form-group"><label>Name</label><input class="q-input" type="text" id="clientName" required></div>
+              <div class="q-form-group"><label>Email</label><input class="q-input" type="email" id="clientEmail"></div>
+              <div class="q-form-group"><label>Phone</label><input class="q-input" type="text" id="clientPhone"></div>
+              <div class="q-form-group"><label>Address</label><textarea class="q-textarea" id="clientAddress"></textarea></div>
+            </div>
+
+            <div class="q-card">
+              <h2>Vinyl Areas</h2>
+              <div id="areas"></div>
+              <button type="button" class="q-btn" id="addAreaBtn">+ Add Area</button>
+            </div>
+
+            <div class="q-card">
+              <h2>Job Details</h2>
+              <div class="q-form-group"><label>Estimated Hours</label><input class="q-input" type="number" id="jobHours" step="0.1"></div>
+              <div class="q-form-group"><label>Accommodation Nights</label><input class="q-input" type="number" id="accomNights"></div>
+              <div class="q-form-group"><label>EV Charge Cost (£)</label><input class="q-input" type="number" id="travelBuffer" step="0.01"></div>
+              <div class="q-form-group"><label>Repairs</label>
+                <select id="repairs" class="q-select"><option>None</option><option>Low</option><option>Medium</option><option>High</option></select>
+              </div>
+              <div class="q-form-group"><label>Extra Charges (£)</label><input class="q-input" type="number" id="extraCharges" step="0.01"></div>
+            </div>
+
+            <div class="q-card">
+              <h2>Discount</h2>
+              <div class="q-form-group"><label>Discount %</label><input class="q-input" type="number" id="discountPercent" step="1"></div>
+              <div class="q-form-group"><label>Discount Name</label><input class="q-input" type="text" id="discountName"></div>
+            </div>
+
+            <div class="q-card">
+              <h2>Notes</h2>
+              <textarea class="q-textarea" id="notes"></textarea>
+            </div>
+
+            <div style="text-align:left"><button type="button" class="q-btn" id="previewBtn">Preview Quote</button></div>
+          </form>
+
+          <div id="quoteModal" class="q-modal"><div class="q-modal-content"><div class="q-modal-header">Quote Preview<span class="q-close" id="closePreview">&times;</span></div><div class="q-modal-body"><div id="quotePreview"></div><br><button class="q-btn" id="saveEmailBtn">Save & Email</button></div></div></div>
+
+          <div id="emailModal" class="q-modal"><div class="q-modal-content"><div class="q-modal-header">Email Status<span class="q-close" id="closeEmailModalBtn">&times;</span></div><div class="q-modal-body"><div id="emailStatus"></div><br><button class="q-btn" id="emailModalCloseBtn">Close</button></div></div></div>
+        </div>
+      `;
+
+      container.innerHTML = markup;
+      appView.appendChild(container);
+
+      // Inject script to wire behavior (scoped to this rendered markup)
+      const scriptContent = `(function(){
+  let lastTotal = 0;
+  let lockedDeposit = 0;
+
+  function addArea(){
+    const container = document.getElementById('areas');
+    const idx = container.children.length + 1;
+    const div = document.createElement('div');
+    div.className = 'q-form-group';
+    div.style.borderBottom = '1px solid #eee';
+    div.style.paddingBottom = '10px';
+    div.style.marginBottom = '10px';
+    div.innerHTML = '<label>Area ' + idx + ' Label</label>' +
+      '<input class="q-input" type="text" name="areaLabel' + idx + '" required>' +
+      '<label>Linear Metres</label>' +
+      '<input class="q-input" type="number" name="areaLm' + idx + '" step="0.01" required>' +
+      '<label>Quantity</label>' +
+      '<input class="q-input" type="number" name="areaQty' + idx + '" value="1" required>' +
+      '<label>Cost per LM (£)</label>' +
+      '<input class="q-input" type="number" name="areaCost' + idx + '" step="0.01" required>' +
+      '<label>Vinyl Product Code</label>' +
+      '<input class="q-input" type="text" name="areaCode' + idx + '">';
+    container.appendChild(div);
+  }
+
+  function previewQuote(){
+    const total = lastTotal ? lastTotal.toFixed(2) : 'Calculated on Save';
+    const deposit = lockedDeposit ? lockedDeposit.toFixed(2) : 'Calculated on Save';
+    document.getElementById('quotePreview').innerHTML = '<p><strong>Quote will be saved & emailed.</strong></p>' +
+      '<p><strong>Final Total:</strong> £' + total + '</p>' +
+      '<p><strong>Deposit Required:</strong> £' + deposit + '</p>' +
+      '<small>(Full breakdown is included in your internal PDF & email)</small>';
+    document.getElementById('quoteModal').style.display = 'block';
+  }
+
+  function submitQuote(){
+    document.getElementById('quoteModal').style.display = 'none';
+    document.getElementById('emailModal').style.display = 'block';
+    document.getElementById('emailStatus').innerText = '⏳ Sending...';
+
+    const areaDivs = document.querySelectorAll('#areas .q-form-group');
+    let areas = [];
+    areaDivs.forEach(function(div, i){
+      const label = div.querySelector("input[name='areaLabel" + (i+1) + "']").value;
+      const lm = div.querySelector("input[name='areaLm" + (i+1) + "']").value;
+      const qty = div.querySelector("input[name='areaQty" + (i+1) + "']").value;
+      const cost = div.querySelector("input[name='areaCost" + (i+1) + "']").value;
+      const code = div.querySelector("input[name='areaCode" + (i+1) + "']").value;
+      areas.push({ label: label, lm: lm, qty: qty, costPerLM: cost, code: code });
+    });
+
+    fetch('https://script.google.com/macros/s/AKfycbwDtfMaObFsfAgs2jMSGa93EKsljS6U18oE04BH5KqdPAjqYfMpHX7GL-u8AReEzus/exec', {
+      method: 'POST',
+      body: new URLSearchParams({
+        clientName: document.getElementById('clientName').value,
+        clientEmail: document.getElementById('clientEmail').value,
+        clientPhone: document.getElementById('clientPhone').value,
+        clientAddress: document.getElementById('clientAddress').value,
+        jobHours: document.getElementById('jobHours').value,
+        accomNights: document.getElementById('accomNights').value,
+        travelBuffer: document.getElementById('travelBuffer') ? document.getElementById('travelBuffer').value : '',
+        repairs: document.getElementById('repairs').value,
+        extraCharges: document.getElementById('extraCharges').value,
+        discountPercent: document.getElementById('discountPercent').value,
+        discountName: document.getElementById('discountName').value,
+        notes: document.getElementById('notes').value,
+        areas: JSON.stringify(areas)
+      })
+    })
+    .then(function(res){ return res.json(); })
+    .then(function(res){
+      if(res.success){
+        var expiry = new Date(); expiry.setDate(expiry.getDate()+30); var expiryDate = expiry.toLocaleDateString('en-GB');
+        var clientName = document.getElementById('clientName').value || 'Client';
+        var clientEmail = document.getElementById('clientEmail').value || '';
+        var quoteRef = res.quoteNumber || '';
+        var total = res.totalWithMargin ? res.totalWithMargin.toFixed(2) : '0.00';
+        var deposit = res.deposit ? res.deposit.toFixed(2) : '0.00';
+        lastTotal = res.totalWithMargin; lockedDeposit = res.deposit;
+        var subject = encodeURIComponent('Your Elite Wrapz Quote | ' + quoteRef);
+        var body = encodeURIComponent('Hi ' + clientName + '\n\nThank you for considering Elite Wrapz... Final TOTAL: £' + total + ' - Deposit: £' + deposit);
+        var mailtoLink = 'mailto:' + clientEmail + '?subject=' + subject + '&body=' + body;
+        document.getElementById('emailStatus').innerHTML = '✅ Quote saved & emailed (Ref: ' + quoteRef + ')<br><strong>FINAL TOTAL:</strong> £' + total + '<br><strong>DEPOSIT REQUIRED:</strong> £' + deposit + '<br><br><a href="' + mailtoLink + '" class="q-btn" style="text-decoration:none;">📧 Email Quote to Client</a>';
+      } else {
+        document.getElementById('emailStatus').innerText = '❌ Error: ' + res.error;
+      }
+    })
+    .catch(function(err){ document.getElementById('emailStatus').innerText = '❌ Network Error: ' + err.message; });
+  }
+
+  function closeModal(){ document.getElementById('quoteModal').style.display='none'; }
+  function closeEmailModal(){ document.getElementById('emailModal').style.display='none'; }
+
+  document.getElementById('addAreaBtn').addEventListener('click', addArea);
+  document.getElementById('previewBtn').addEventListener('click', previewQuote);
+  document.getElementById('saveEmailBtn').addEventListener('click', submitQuote);
+  document.getElementById('closePreview').addEventListener('click', closeModal);
+  document.getElementById('closeEmailModalBtn').addEventListener('click', closeEmailModal);
+  document.getElementById('emailModalCloseBtn').addEventListener('click', closeEmailModal);
+
+  window.__addArea = addArea; window.__previewQuote = previewQuote; window.__submitQuote = submitQuote;
+})();
+`;
+
+      const s = document.createElement('script'); s.type='text/javascript'; s.textContent = scriptContent;
+      document.body.appendChild(s);
+
+  // (no second script to inject)
+
+      return container;
     }
+
     function renderOptimiser(){
-      embedExternal('https://elitewrapzuk.github.io/eliteoptimiser/', 'Cut Optimiser');
+      const view = document.getElementById('view'); view.innerHTML = '';
+      const container = el('div',{class:'card pad'},[]);
+      container.append(el('div',{class:'section-title',html:'Cut Optimiser'}));
+
+      container.append(el('div',{html:`
+        <label>Roll width (mm):</label>
+        <input class="input" type="number" id="opt_rollWidth" value="1220" min="50" step="1"/>
+        <label>Roll length (mm) <span style="font-size:.85em;font-weight:400;">(leave blank or 0 to auto-calc)</span>:</label>
+        <input class="input" type="number" id="opt_rollLength" value="0" min="0" step="1"/>
+        <label>Overhang per side (mm):</label>
+        <input class="input" type="number" id="opt_overhang" value="50" min="0" step="1"/>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;"><input type="checkbox" id="opt_allowRotation" checked /> Allow rotation</label>
+        <label>Pieces (width x height [code optional], one per line):</label>
+        <textarea class="input" id="opt_pieces" rows="6">600x300 A1
+600x300 A2
+400x400 A3
+200x1200 A4</textarea>
+        <div style="display:flex;gap:8px;margin-top:12px"><button class="btn primary" id="opt_run">Optimize & Draw</button><button class="btn" id="opt_export">Export as JPEG</button><button class="btn" id="opt_clear">Clear</button></div>
+        <div style="margin-top:12px" id="opt_alerts"></div>
+        <div id="opt_stats" class="muted" style="margin-top:8px;display:none"></div>
+        <div style="margin-top:12px;border-radius:6px;overflow:auto;background:var(--surface);padding:8px" id="opt_canvasWrap"><canvas id="opt_canvas" width="900" height="2200" style="width:100%;height:auto;border:2px solid var(--brand)"></canvas></div>
+        <table class="table" id="opt_summary" style="display:none;margin-top:12px"><thead><tr><th>Code</th><th>Original (mm)</th><th>With Overhang (mm)</th><th>Orientation</th></tr></thead><tbody></tbody></table>
+      `}));
+
+  // Inject into the SPA view container so route shows the form
+  const appView = document.getElementById('view');
+  appView.innerHTML = '';
+  appView.appendChild(container);
+
+      // Inline optimiser logic (adapted from provided file)
+      function parsePieces(input){
+        return input.split('\n').map(line=>{ const m=line.match(/(\d+)\s*x\s*(\d+)(?:\s+([A-Za-z0-9_-]+))?/i); return m?{w:parseInt(m[1]),h:parseInt(m[2]),code:m[3]||""}:null }).filter(Boolean);
+      }
+
+      function autoLength(pieces,rollW,overhang,allowRot){
+        if(!pieces.length) return 0;
+        const dims=pieces.map(p=>({W:p.w+2*overhang,H:p.h+2*overhang}));
+        const areaTotal=dims.reduce((a,d)=>a+d.W*d.H,0);
+        const maxH=Math.max(...dims.map(d=>d.H));
+        let lb=Math.max(maxH,Math.ceil(areaTotal/rollW));
+        let ub=dims.reduce((a,d)=>a+d.H,0);
+        const test=(H)=>maxRects(pieces,[{x:0,y:0,w:rollW,h:H}],overhang,allowRot).failed.length===0;
+        while(!test(ub)) ub=Math.ceil(ub*1.5);
+        while(lb<ub){ const mid=Math.floor((lb+ub)/2); if(test(mid)) ub=mid; else lb=mid+1; }
+        return ub;
+      }
+
+      function maxRects(pieces,freeRects,overhang,allowRot){
+        let placed=[],failed=[];
+        const score=(f,pw,ph)=>Math.min(Math.abs(f.w-pw),Math.abs(f.h-ph));
+        pieces.forEach(p=>{
+          let W=p.w+2*overhang,H=p.h+2*overhang,rotW=H,rotH=W,best=null;
+          freeRects.forEach(f=>{
+            if(W<=f.w&&H<=f.h){let s=score(f,W,H);if(!best||s<best.score)best={x:f.x,y:f.y,w:W,h:H,orientation:"Normal",score:s};}
+            if(allowRot&&rotW<=f.w&&rotH<=f.h){let s=score(f,rotW,rotH);if(!best||s<best.score)best={x:f.x,y:f.y,w:rotW,h:rotH,orientation:"Rotated",score:s};}
+          });
+          if(best){placed.push({...p,...best});freeRects=splitAndPrune(freeRects,best);freeRects=mergeAdjacent(freeRects);}else failed.push(p);
+        });
+        return {placed,failed,freeRects};
+      }
+
+      function splitAndPrune(freeRects,used){
+        let newFree=[];
+        freeRects.forEach(f=>{
+          if(used.x>=f.x+f.w||used.x+used.w<=f.x||used.y>=f.y+f.h||used.y+used.h<=f.y){newFree.push(f);} else {
+            if(used.x>f.x)newFree.push({x:f.x,y:f.y,w:used.x-f.x,h:f.h});
+            if(used.x+used.w<f.x+f.w)newFree.push({x:used.x+used.w,y:f.y,w:(f.x+f.w)-(used.x+used.w),h:f.h});
+            if(used.y>f.y)newFree.push({x:f.x,y:f.y,w:f.w,h:used.y-f.y});
+            if(used.y+used.h<f.y+f.h)newFree.push({x:f.x,y:used.y+used.h,w:f.w,h:(f.y+f.h)-(used.y+used.h)});
+          }
+        });
+        return newFree.filter((r,i,self)=>!self.some((o,j)=>j!==i&&r.x>=o.x&&r.y>=o.y&&r.x+r.w<=o.x+o.w&&r.y+r.h<=o.y+o.h));
+      }
+
+      function mergeAdjacent(rects){
+        let merged=true;
+        while(merged){ merged=false; for(let i=0;i<rects.length;i++){ for(let j=i+1;j<rects.length;j++){ const a=rects[i],b=rects[j]; if(a.y===b.y&&a.h===b.h&&(a.x+a.w===b.x||b.x+b.w===a.x)){ rects.splice(j,1); rects[i]={x:Math.min(a.x,b.x),y:a.y,w:a.w+b.w,h:a.h}; merged=true; break; } if(a.x===b.x&&a.w===b.w&&(a.y+a.h===b.y||b.y+b.h===a.y)){ rects.splice(j,1); rects[i]={x:a.x,y:Math.min(a.y,b.y),w:a.w,h:a.h+b.h}; merged=true; break; } } if(merged) break; } }
+        return rects;
+      }
+
+      function drawRoll(placed,rollW,rollH,overhang,freeRects){
+        const canvas=document.getElementById('opt_canvas'),ctx=canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height);
+        const scale=Math.min(canvas.width/rollW,canvas.height/rollH);
+        ctx.strokeStyle='black';ctx.lineWidth=2;ctx.strokeRect(0,0,rollW*scale,rollH*scale);
+        ctx.setLineDash([10,10]);ctx.strokeStyle='red';ctx.lineWidth=1;
+        for(let m=1000;m<rollH;m+=1000){let y=m*scale;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(rollW*scale,y);ctx.stroke();ctx.fillStyle='red';ctx.font='12px Inter, Arial';ctx.textAlign='right';ctx.fillText(`${m/1000}m`,rollW*scale-5,y-2);} ctx.setLineDash([]);
+        placed.forEach(p=>{ ctx.fillStyle='#e6f4ff'; ctx.fillRect(p.x*scale,p.y*scale,p.w*scale,p.h*scale); ctx.strokeStyle='#000'; ctx.lineWidth=2; ctx.strokeRect(p.x*scale,p.y*scale,p.w*scale,p.h*scale); const cx=(p.x+p.w/2)*scale,cy=(p.y+p.h/2)*scale; ctx.textAlign='center'; ctx.textBaseline='middle'; if(p.code){ ctx.fillStyle='#000'; ctx.font='bold 14px Inter, Arial'; ctx.fillText(p.code,cx,cy-8); } ctx.fillStyle='#000'; ctx.font='12px Inter, Arial'; ctx.fillText(`${p.w-2*overhang}x${p.h-2*overhang}`,cx,cy+10); });
+      }
+
+      function exportJPEG(){ const canvas=document.getElementById('opt_canvas'); const link=document.createElement('a'); link.download='cut-plan.jpg'; link.href=canvas.toDataURL('image/jpeg',1.0); link.click(); }
+
+      // control wiring
+      document.getElementById('opt_run').addEventListener('click', ()=>{
+        const rollW = parseInt(document.getElementById('opt_rollWidth').value) || 0;
+        const rollLInput = parseInt(document.getElementById('opt_rollLength').value) || 0;
+        const overhang = parseInt(document.getElementById('opt_overhang').value) || 0;
+        const allowRotation = document.getElementById('opt_allowRotation').checked;
+        const pieces = parsePieces(document.getElementById('opt_pieces').value || '');
+        const alerts = document.getElementById('opt_alerts'); const stats = document.getElementById('opt_stats'); const summary = document.getElementById('opt_summary'); const tbody = summary.querySelector('tbody');
+        alerts.style.display='none'; stats.style.display='none'; summary.style.display='none'; tbody.innerHTML='';
+        if(!rollW || !pieces.length){ alerts.style.display='block'; alerts.textContent='Roll width and at least one piece required'; return; }
+        const rollH = rollLInput>0?rollLInput:autoLength(pieces,rollW,overhang,allowRotation);
+        const res = maxRects(pieces,[{x:0,y:0,w:rollW,h:rollH}],overhang,allowRotation);
+        drawRoll(res.placed,rollW,rollH,overhang,res.freeRects);
+        const usedArea = res.placed.reduce((a,p)=>a+p.w*p.h,0); const rollArea = rollW*rollH; const wasteArea=Math.max(0,rollArea-usedArea); const lmExact=rollH/1000; const lmRounded=Math.ceil(lmExact); const usedM2=(usedArea/1e6).toFixed(2); const wasteM2=(wasteArea/1e6).toFixed(2); const eff=rollArea>0?Math.round((1-wasteArea/rollArea)*100):100;
+        stats.style.display='block'; stats.textContent=`Linear metres required: ${lmExact.toFixed(2)} m (Order: ${lmRounded} m) · Used: ${usedM2} m² · Waste: ${wasteM2} m² · Efficiency: ${eff}%`;
+
+    function renderSignatures(){ return embedLocal('/tools/signature_portal.html','In-Person Signatures'); }
+
+        res.placed.forEach(p => {
+          tbody.innerHTML += `<tr><td>${p.code||'-'}</td><td>${p.w-2*overhang}x${p.h-2*overhang}</td><td>${p.w}x${p.h}</td><td>${p.orientation}</td></tr>`;
+        });
+        summary.style.display = 'table';
+        if(res.failed.length){
+          alerts.style.display = 'block';
+          alerts.innerHTML = '⚠️ The following didn’t fit:<br>' + res.failed.map(p => `${p.w-2*overhang}x${p.h-2*overhang}${p.code ? ' ' + p.code : ''}`).join(', ');
+        }
+      });
+
+      document.getElementById('opt_export').addEventListener('click', exportJPEG);
+      document.getElementById('opt_clear').addEventListener('click', clearAll);
+
     }
+
     function renderSignatures(){
-      embedExternal('https://elitewrapzuk.github.io/elitewrapzsignatures/', 'In-Person Signatures');
+      const appView = document.getElementById('view'); appView.innerHTML = '';
+      const container = el('div',{class:'card pad'});
+
+      const markup = `
+        <style>
+          /* In-person Signature page (scoped) */
+          .sig-wrap{ font-family: Inter, Arial, sans-serif; color:var(--ink) }
+          .sig-head{ text-align:center; margin-bottom:12px }
+          .sig-grid{ display:grid; grid-template-columns:1fr; gap:12px }
+          .sig-row{ display:flex; gap:12px; flex-wrap:wrap }
+          .sig-input{ width:100%; }
+          #sig_canvas{ border:2px dashed #444; width:100%; height:220px; touch-action:none; display:block }
+          .sig-actions{ display:flex; gap:8px; margin-top:8px }
+          .sig-btn{ padding:10px 12px; border-radius:8px; border:1px solid var(--line); background:var(--brand); color:#001014; font-weight:700; cursor:pointer }
+          .sig-btn.ghost{ background:transparent; color:var(--muted); border:1px solid var(--line) }
+        </style>
+
+        <div class="sig-wrap">
+          <div class="sig-head">
+            <h2 style="margin:6px 0">Digital Signatures — In Person</h2>
+            <p class="muted" style="margin:0">Complete the fields and sign below. Download a PDF copy when finished.</p>
+            <hr style="margin:12px 0 18px 0">
+          </div>
+
+          <div class="sig-grid">
+            <div>
+              <label class="hint">Agreement Type *</label>
+              <select id="sig_agreementType" class="input sig-input">
+                <option value="service">Service Agreement</option>
+                <option value="payment">Payment Plan Agreement</option>
+                <option value="cooling">Cooling-Off Period Waiver</option>
+              </select>
+            </div>
+
+            <div class="sig-row">
+              <div style="flex:1"><label>Full name *</label><input id="sig_clientName" class="input"/></div>
+              <div style="width:220px"><label>Contact number *</label><input id="sig_clientContact" class="input"/></div>
+            </div>
+
+            <div>
+              <label>Email (optional)</label>
+              <input id="sig_clientEmail" class="input" type="email" />
+            </div>
+
+            <div>
+              <label>Address *</label>
+              <textarea id="sig_clientAddress" class="input" rows="3"></textarea>
+            </div>
+
+            <div>
+              <label style="display:block;margin-bottom:6px">Signature *</label>
+              <canvas id="sig_canvas"></canvas>
+              <div class="sig-actions">
+                <button id="sig_clear" class="sig-btn ghost">Clear</button>
+                <button id="sig_download" class="sig-btn">Download Signed Acknowledgement</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      container.innerHTML = markup; appView.appendChild(container);
+
+      // Load SignaturePad and jsPDF then initialise the view
+      const CDN_SIG = 'https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js';
+      const CDN_JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+
+      function loadScript(src){ return new Promise((resolve, reject)=>{
+        if(document.querySelector('script[src="'+src+'"]')) return resolve();
+        const s = document.createElement('script'); s.src = src; s.onload = () => resolve(); s.onerror = (e)=>reject(e); document.body.appendChild(s);
+      }); }
+
+      (async function initSignature(){
+        try{
+          await loadScript(CDN_SIG);
+          await loadScript(CDN_JSPDF);
+
+          const canvas = document.getElementById('sig_canvas');
+          function resizeCanvas(){ const ratio = Math.max(window.devicePixelRatio || 1, 1); const w = canvas.offsetWidth; const h = canvas.offsetHeight; canvas.width = Math.round(w * ratio); canvas.height = Math.round(h * ratio); const ctx = canvas.getContext('2d'); ctx.scale(ratio, ratio); }
+          window.addEventListener('resize', resizeCanvas); resizeCanvas();
+
+          const signaturePad = new SignaturePad(canvas);
+
+          document.getElementById('sig_clear').addEventListener('click', ()=> signaturePad.clear());
+
+          document.getElementById('sig_download').addEventListener('click', ()=>{
+            const agreementType = document.getElementById('sig_agreementType').value;
+            const name = document.getElementById('sig_clientName').value.trim();
+            const contact = document.getElementById('sig_clientContact').value.trim();
+            const email = document.getElementById('sig_clientEmail').value.trim();
+            const address = document.getElementById('sig_clientAddress').value.trim();
+
+            if(!agreementType || !name || !contact || !address){ alert('Please fill in all required fields.'); return; }
+            if(signaturePad.isEmpty()){ alert('Please provide a signature.'); return; }
+
+            const sigImg = signaturePad.toDataURL('image/png');
+            const { jsPDF } = window.jspdf || window.jspdf || {};
+            const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            let y = 40;
+
+            let title = '';
+            let statement = '';
+            let filenamePrefix = 'Elite_Wrapz';
+            if(agreementType === 'service'){
+              title = 'Service Agreement Acknowledgement';
+              statement = 'I, the Customer, confirm that I have read and agree to the terms of the Elite Wrapz Service Agreement.';
+              filenamePrefix += '_Service_Agreement';
+            } else if(agreementType === 'payment'){
+              title = 'Payment Plan Agreement Acknowledgement';
+              statement = 'I, the Customer, agree to the terms of the Payment Plan Agreement as outlined by Elite Wrapz.';
+              filenamePrefix += '_Payment_Plan_Agreement';
+            } else if(agreementType === 'cooling'){
+              title = 'Cooling-Off Period Waiver';
+              statement = 'I, the Customer, acknowledge my right to a 14-day cooling-off period but request that Elite Wrapz commence work immediately, and I waive this right.';
+              filenamePrefix += '_Cooling_Off_Waiver';
+            }
+
+            const now = new Date().toLocaleString();
+
+            doc.setFontSize(16); doc.text(title, 40, y); y += 40;
+            doc.setFontSize(12); doc.setFont(undefined, 'bold'); doc.text('Client Name:', 40, y); doc.setFont(undefined, 'normal'); doc.text(name, 160, y); y += 18;
+            doc.setFont(undefined, 'bold'); doc.text('Contact Number:', 40, y); doc.setFont(undefined, 'normal'); doc.text(contact, 160, y); y += 18;
+            if(email){ doc.setFont(undefined, 'bold'); doc.text('Email:', 40, y); doc.setFont(undefined, 'normal'); doc.text(email, 160, y); y += 18; }
+            doc.setFont(undefined, 'bold'); doc.text('Address:', 40, y); doc.setFont(undefined, 'normal'); const splitAddress = doc.splitTextToSize(address, pageWidth - 160); doc.text(splitAddress, 160, y); y += splitAddress.length * 14 + 30;
+            y += 20;
+            doc.setFont(undefined, 'normal'); doc.setFontSize(11); const splitStatement = doc.splitTextToSize(statement, pageWidth - 80); doc.text(splitStatement, 40, y); y += splitStatement.length * 14 + 40;
+            doc.setFont(undefined, 'bold'); doc.text('Signature:', 40, y); y += 20;
+            doc.addImage(sigImg, 'PNG', 40, y, 250, 80); y += 100;
+            doc.setFont(undefined, 'normal'); doc.setFontSize(12); doc.text(`This agreement was signed and agreed to on ${now}.`, 40, y);
+            doc.setFontSize(9); doc.text('Elite Wrapz | www.elitewrapz.uk', pageWidth/2, pageHeight - 20, { align: 'center' });
+
+            const safeName = name.replace(/\s+/g, '_');
+            const filename = `${filenamePrefix}_${safeName}.pdf`;
+            doc.save(filename);
+          });
+
+        }catch(e){ console.error('Failed to load signature libraries', e); alert('Signature tools failed to load.'); }
+      })();
+
+      return container;
     }
+
     function renderRemoteSign(){
-      embedExternal('https://elitewrapzuk.github.io/remotesignature/', 'Remote Signatures');
+      // For remote signing we use the same UI but auto-hide admin if params present
+      return renderSignatures();
     }
+
     function renderRemoteQuote(){
-      const url = 'https://elitewrapzuk.github.io/remotequoteform/';
-      const card = embedExternal(url, 'Remote Quote Form');
-      // Add copyable link bar below the iframe
-      const bar = document.createElement('div');
-      bar.className = 'row';
-      bar.style = 'margin-top:10px;align-items:center;gap:8px';
-      const input = document.createElement('input');
-      input.className = 'input';
-      input.value = url;
-      input.readOnly = true;
-      input.style = 'flex:1';
-      const btn = document.createElement('button');
-      btn.className = 'btn';
-      btn.textContent = 'Copy Link';
-      btn.addEventListener('click', ()=> copyText(url));
-      bar.append(input, btn);
-      card.append(bar);
+      // Inject the exact Remote Quote standalone markup (styles + form) and run its script so it behaves identically
+      const appView = document.getElementById('view');
+      appView.innerHTML = '';
+
+      const container = el('div',{class:'card pad'});
+
+      // Styles + markup from the provided remote quote page (body only)
+      const markup = `
+        <style>
+          :root{ --primary:#00b3b3; --primary-dark:#008f8f; --grey-light:#f5f5f5; --grey:#ddd; --grey-dark:#999; --font: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+          .form-wrapper{ max-width:800px; margin:40px auto; background:white; padding:30px 40px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1); font-family:var(--font); color:#333 }
+          .form-wrapper h2{ margin-top:0; text-align:center; color:var(--primary-dark) }
+          .form-wrapper p{ text-align:center; margin-bottom:25px; font-size:1rem; color:#555 }
+          .form-group{ margin-bottom:20px }
+          .form-group label{ display:block; margin-bottom:6px; font-weight:bold }
+          .form-group input, .form-group select, .form-group textarea{ width:100%; padding:10px; border:1px solid var(--grey); border-radius:4px; font-size:1rem; box-sizing:border-box }
+          .form-group textarea{ resize:vertical; min-height:100px }
+          .btn-submit{ background:var(--primary); color:white; border:none; padding:14px 30px; font-size:1.1rem; border-radius:4px; cursor:pointer }
+          .btn-submit:hover{ background:var(--primary-dark) }
+          .required{ color:red }
+          .hidden{ display:none }
+          /* modal styles (scoped minimally) */
+          .rq-modal{ position:fixed; inset:0; background:rgba(0,0,0,0.6); display:none; align-items:center; justify-content:center; z-index:1200 }
+          .rq-modal .modal-content{ background:white; padding:20px; border-radius:8px; max-width:90%; max-height:90%; overflow:auto }
+        </style>
+
+        <div class="form-wrapper" id="remote-quote-wrapper">
+          <div style="text-align:center; margin:20px 0;"></div>
+          <h2>Get Your Quote Without a Visit</h2>
+          <p>If you’re outside the Midlands, or would prefer not to meet face-to-face, simply fill in this form and we’ll provide your quote remotely.</p>
+
+          <form id="remoteQuoteForm">
+            <div class="form-group">
+              <label for="reason">Why are you filling out this form? <span class="required">*</span></label>
+              <select id="reason" name="reason" required>
+                <option value="" disabled selected>Select one</option>
+                <option value="Out of Area">I live outside the Midlands</option>
+                <option value="No Face to Face">I’d prefer not to have a face-to-face consultation</option>
+              </select>
+            </div>
+
+            <div class="form-group hidden" id="disclaimerGroup">
+              <button type="button" id="viewDisclaimerBtn" style="margin-bottom:10px;" class="btn">View Terms & Conditions</button>
+              <label><input type="checkbox" id="ackDisclaimer" name="ackDisclaimer" required> I have read and accept the terms</label>
+            </div>
+
+            <div class="rq-modal" id="disclaimerModal"><div class="modal-content"><h2>Terms & Conditions for Remote Quotes</h2><div><ol><li><strong>Colour & Finish Accuracy:</strong> Digital images of vinyl may differ from in-person. Elite Wrapz cannot be held responsible for differences due to screen settings or lighting.</li><li><strong>Samples:</strong> Physical samples available at £1 each plus £5 postage, deducted from your final invoice if you proceed.</li><li><strong>Measurements:</strong> Clients must provide accurate measurements. Errors may incur additional costs.</li><li><strong>Communication:</strong> Clients agree to cooperate in providing details via phone, messages, or email. Lack of communication may cause delays.</li><li><strong>Quote Validity:</strong> Remote quotes are based on supplied info. Discrepancies found on-site may result in extra charges.</li><li><strong>Surface Condition & Repairs:</strong> Without a site visit, we cannot confirm repairs. Issues may affect cost and time.</li><li><strong>Deposit & Booking:</strong> A deposit is required to secure your booking. By proceeding, you accept these terms.</li><li><strong>Cancellation Policy:</strong> Cancellations after deposit may result in forfeiture. Rescheduling may affect availability.</li><li><strong>Limitations of Remote Quotes:</strong> Quotes are estimates only. Final pricing may adjust if hidden damage or access issues are found.</li><li><strong>Client Responsibility:</strong> Surfaces must be clean, dry, and accessible. Delays from unprepared sites may incur charges.</li></ol></div><div style="text-align:right;margin-top:12px"><button class="btn" id="closeDisclaimerBtn">Close</button></div></div></div>
+
+            <div class="rq-modal" id="confirmationModal"><div class="modal-content"><h2>✅ Thanks!</h2><p>Your request has been sent successfully.</p><p>We aim to respond within <strong>48 hours</strong> — please keep an eye on WhatsApp and your email (check your spam folder too).</p><div style="text-align:right;margin-top:12px"><button class="btn" id="closeConfirmationBtn">Close</button></div></div></div>
+
+            <!-- Client Details -->
+            <div class="form-group"><label for="firstName">First Name <span class="required">*</span></label><input type="text" id="firstName" name="firstName" required></div>
+            <div class="form-group"><label for="lastName">Last Name <span class="required">*</span></label><input type="text" id="lastName" name="lastName" required></div>
+            <div class="form-group"><label for="phone">Phone Number <span class="required">*</span></label><input type="tel" id="phone" name="phone" required></div>
+            <div class="form-group"><label for="email">Email <span class="required">*</span></label><input type="email" id="email" name="email" required></div>
+            <div class="form-group"><label for="address1">Address (Street) <span class="required">*</span></label><input type="text" id="address1" name="address1" required></div>
+            <div class="form-group"><label for="address2">Address Line 2</label><input type="text" id="address2" name="address2"></div>
+            <div class="form-group"><label for="cityCounty">City / County <span class="required">*</span></label><input type="text" id="cityCounty" name="cityCounty" required></div>
+            <div class="form-group"><label for="postcode">Post Code <span class="required">*</span></label><input type="text" id="postcode" name="postcode" required></div>
+
+            <div class="form-group"><label for="services">What services are you interested in? <span class="required">*</span></label><select id="services" name="services" required><option value="" disabled selected>Select one</option><option value="Kitchen Worktop Wrapping">Kitchen Worktop Wrapping</option><option value="Kitchen Cupboard Wrapping">Kitchen Cupboard Wrapping</option><option value="Kitchen Worktop and Cupboard Wrap">Kitchen Worktop and Cupboard Wrap</option><option value="Commercial Wrapping">Commercial Wrapping</option><option value="Window Film Installation">Window Film Installation</option><option value="Other">Other</option></select></div>
+            <div class="form-group hidden" id="otherServiceGroup"><label for="otherService">Please specify what you’d like wrapped <span class="required">*</span></label><textarea id="otherService" name="otherService"></textarea></div>
+
+            <div class="form-group"><label>Is the surface to be wrapped damaged? <span class="required">*</span></label><select id="surfaceDamage" name="surfaceDamage" required><option value="" disabled selected>Select</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
+            <div class="form-group hidden" id="damageDetailsGroup"><label for="damageDetails">If “Yes”, please explain <span class="required">*</span></label><textarea id="damageDetails" name="damageDetails"></textarea></div>
+
+            <div class="form-group"><label for="budget">Do you have a budget in mind? <span class="required">*</span></label><input type="text" id="budget" name="budget" required></div>
+            <div class="form-group"><label for="stylePattern">What style/pattern are you looking for? <span class="required">*</span></label><select id="stylePattern" name="stylePattern" required><option value="" disabled selected>Select one</option><option value="Woodgrain">Woodgrain</option><option value="Marble">Marble</option><option value="Stone">Stone</option><option value="Gloss Colour">Gloss Colour</option><option value="Matt Colour">Matt Colour</option><option value="Other">Other</option></select></div>
+
+            <div class="form-group"><label>Images of the area / any damage <span class="required">*</span></label><p style="font-size:0.95rem; color:#555;">Please send any photos to <strong>contact@elitewrapz.uk</strong> and include your <strong>name</strong> in the subject line.</p></div>
+
+            <div class="form-group"><label for="additionalInfo">Any more details you’d like to share <span class="required">*</span></label><textarea id="additionalInfo" name="additionalInfo" required></textarea></div>
+
+            <div class="form-group hidden"><label>Should be empty: <input type="text" name="honeypot"></label></div>
+
+            <div style="text-align:center;margin-top:14px"><button type="submit" class="btn-submit">Submit</button></div>
+          </form>
+        </div>
+      `;
+
+      container.innerHTML = markup;
+      appView.appendChild(container);
+
+      // Now inject and run the page script (adapted exactly from the provided file)
+      const scriptCode = `
+        const reasonEl = document.getElementById("reason");
+        const disclaimerGroup = document.getElementById("disclaimerGroup");
+        const ackDisclaimer = document.getElementById("ackDisclaimer");
+        const disclaimerModal = document.getElementById("disclaimerModal");
+        const viewDisclaimerBtn = document.getElementById("viewDisclaimerBtn");
+        const closeDisclaimerBtn = document.getElementById("closeDisclaimerBtn");
+        const confirmationModal = document.getElementById("confirmationModal");
+        const closeConfirmationBtn = document.getElementById("closeConfirmationBtn");
+
+        reasonEl.addEventListener("change", () => {
+          if (reasonEl.value === "Out of Area" || reasonEl.value === "No Face to Face") {
+            disclaimerGroup.classList.remove("hidden");
+            ackDisclaimer.required = true;
+          } else {
+            disclaimerGroup.classList.add("hidden");
+            ackDisclaimer.required = false;
+            ackDisclaimer.checked = false;
+          }
+        });
+
+        viewDisclaimerBtn.addEventListener("click", () => {
+          disclaimerModal.style.display = "flex";
+        });
+        // closeDisclaimerBtn might not exist in this injected markup; guard it
+        if(closeDisclaimerBtn) closeDisclaimerBtn.addEventListener("click", () => {
+          disclaimerModal.style.display = "none";
+        });
+
+        if(closeConfirmationBtn) closeConfirmationBtn.addEventListener("click", () => {
+          confirmationModal.style.display = "none";
+        });
+
+        document.getElementById("remoteQuoteForm").addEventListener("submit", function(e) {
+          if ((reasonEl.value === "Out of Area" || reasonEl.value === "No Face to Face") && !ackDisclaimer.checked) {
+            e.preventDefault();
+            alert("Please accept the terms before submitting.");
+            return;
+          }
+          e.preventDefault();
+          const form = this;
+          const formData = new FormData(form);
+
+          fetch("https://script.google.com/macros/s/AKfycbzOzEEaxtDfc7g5MUm1sIIilwWX8HB_dE2lKZZWp6tyKEuTz6_drnFSgU4QUGnsZNtO_Q/exec", {
+            method: "POST",
+            body: formData
+          })
+          .then(() => {
+            // open the confirmation modal if available, else toast
+            if(confirmationModal) confirmationModal.style.display = 'flex';
+            form.reset();
+            disclaimerGroup.classList.add("hidden");
+          })
+          .catch(() => alert("❌ Sorry, there was an error. Please try again."));
+        });
+      `;
+
+      const scriptEl = document.createElement('script');
+      scriptEl.type = 'text/javascript';
+      scriptEl.text = scriptCode;
+      document.body.appendChild(scriptEl);
+
+      return container;
+    }
+    
+    /* Referrals View - inline implementation (create, check, use, list) */
+    function renderReferrals(){
+      const view = document.getElementById('view');
+      view.innerHTML = '';
+
+      const container = el('div',{class:'card pad'},[]);
+      container.append(el('div',{class:'section-title',html:'Referrals'}));
+
+      const grid = el('div',{class:'row'},[]);
+
+      // Left column: create / use forms
+      const left = el('div',{style:'flex:1;min-width:320px;max-width:520px;'},[]);
+
+      const createCard = el('div',{class:'card pad'},[]);
+      createCard.append(el('div',{class:'section-title',html:'Create referral code'}));
+      createCard.append(el('div',{html:`
+        <label>Referrer name:<input class="input" id="ref_clientName" placeholder="Client name (referrer)"></label>
+        <label>Job reference:<input class="input" id="ref_jobRef" placeholder="Job reference"></label>
+        <label>Job total:<input class="input" id="ref_jobTotal" type="number" step="0.01" placeholder="Job total"></label>
+        <div style="margin-top:10px"><button class="btn primary" id="createRefBtn">Create Code</button></div>
+        <pre id="createResult" class="hint" style="margin-top:8px"></pre>
+      `}));
+
+      const useCard = el('div',{class:'card pad'},[]);
+      useCard.append(el('div',{class:'section-title',html:'Use referral code'}));
+      useCard.append(el('div',{html:`
+        <label>Referral code:<input class="input" id="use_code" placeholder="Referral code"></label>
+        <label>New client name:<input class="input" id="use_newClient" placeholder="New client name"></label>
+        <div style="margin-top:10px"><button class="btn" id="useRefBtn">Apply Code</button></div>
+        <pre id="useResult" class="hint" style="margin-top:8px"></pre>
+      `}));
+
+      left.append(createCard, el('div',{style:'height:12px'}), useCard);
+
+      // Right column: list of referrals
+      const right = el('div',{style:'flex:2;min-width:360px'},[]);
+      const listCard = el('div',{class:'card pad'},[]);
+      listCard.append(el('div',{class:'section-title',html:'All referrals'}));
+      const tableWrap = el('div',{},[]);
+      tableWrap.innerHTML = `
+        <table class="table" id="ref_table">
+          <thead><tr><th>Client</th><th>Code</th><th>Job Ref</th><th>Job Total</th><th>Used</th><th>Used By</th><th>Date Used</th></tr></thead>
+          <tbody id="ref_list"></tbody>
+        </table>
+      `;
+      listCard.append(tableWrap);
+      right.append(listCard);
+
+      grid.append(left, right);
+      container.append(grid);
+      view.appendChild(container);
+
+      // simple API helper (fallback)
+      async function apiFetch(path, opts={}){
+        const headers = Object.assign({'Content-Type':'application/json'}, opts.headers||{});
+        const res = await fetch(path, Object.assign({}, opts, { headers }));
+        const text = await res.text();
+        let data = null;
+        try{ data = text ? JSON.parse(text) : null; }catch(e){ data = text; }
+        if(!res.ok) throw new Error(data && data.error ? data.error : (res.statusText || 'Request failed'));
+        return data;
+      }
+
+      function showError(el, err){
+        const txt = (err && err.message) ? err.message : String(err);
+        el.textContent = txt;
+        showToast(txt);
+      }
+
+      async function loadList(){
+        const tbody = document.getElementById('ref_list');
+        tbody.innerHTML = '';
+        try{
+          let list = [];
+          if(window.FirebaseHelpers && typeof window.FirebaseHelpers.listReferrals === 'function'){
+            list = await window.FirebaseHelpers.listReferrals();
+          } else {
+            list = await apiFetch('/api/referrals');
+          }
+          list.forEach(r => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${(r.clientName||'')}</td>
+              <td style="font-weight:700;color:var(--brand)">${r.referralCode}</td>
+              <td>${(r.jobRef||'')}</td>
+              <td>${currency(r.jobTotal||0)}</td>
+              <td>${r.used? 'Yes' : 'No'}</td>
+              <td>${r.usedBy || ''}</td>
+              <td>${r.usedDate ? (r.usedDate.seconds ? new Date(r.usedDate.seconds*1000).toLocaleString() : new Date(r.usedDate).toLocaleString()) : ''}</td>
+            `;
+            tbody.appendChild(tr);
+          });
+        }catch(e){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td colspan="7" class="empty">Failed to load referrals</td>`;
+          tbody.appendChild(tr);
+        }
+      }
+
+      // Wire actions
+      document.getElementById('createRefBtn').addEventListener('click', async (ev)=>{
+        ev.preventDefault();
+        const resPre = document.getElementById('createResult'); resPre.textContent = 'Creating...';
+        const clientName = document.getElementById('ref_clientName').value.trim();
+        const jobRef = document.getElementById('ref_jobRef').value.trim();
+        const jobTotal = parseFloat(document.getElementById('ref_jobTotal').value || 0);
+        if(!clientName || !jobRef){ showError(resPre, new Error('Referrer name and job ref required')); return; }
+        try{
+          let rec;
+          if(window.FirebaseHelpers && typeof window.FirebaseHelpers.createReferral === 'function'){
+            rec = await window.FirebaseHelpers.createReferral({ clientName, jobRef, jobTotal });
+          } else {
+            rec = await apiFetch('/api/referrals/create', { method: 'POST', body: JSON.stringify({ clientName, jobRef, jobTotal }) });
+          }
+          resPre.textContent = JSON.stringify(rec, null, 2);
+          showToast('Referral created');
+          loadList();
+        }catch(e){ showError(resPre, e); }
+      });
+
+      document.getElementById('useRefBtn').addEventListener('click', async (ev)=>{
+        ev.preventDefault();
+        const resPre = document.getElementById('useResult'); resPre.textContent = 'Applying...';
+        const code = document.getElementById('use_code').value.trim().toUpperCase();
+        const newClient = document.getElementById('use_newClient').value.trim();
+        if(!code || !newClient){ showError(resPre, new Error('Code and new client name required')); return; }
+        try{
+          let out;
+          if(window.FirebaseHelpers && typeof window.FirebaseHelpers.useReferralCode === 'function'){
+            out = await window.FirebaseHelpers.useReferralCode(code, newClient);
+          } else {
+            out = await apiFetch('/api/referrals/use', { method: 'POST', body: JSON.stringify({ code, newClientName: newClient }) });
+          }
+          resPre.textContent = JSON.stringify(out, null, 2);
+          showToast('Code applied');
+          loadList();
+        }catch(e){ showError(resPre, e); }
+      });
+
+      // initial load
+      loadList();
+
+      return container;
     }
     // --- EMAIL VIEW ---
 
@@ -659,6 +1410,91 @@
           else showToast('Send failed');
         } catch(e){ showToast('Send error'); }
       });
+    }
+
+    // Templates view — inlined from provided templates page
+    function renderTemplates(){
+      const view = document.getElementById('view'); view.innerHTML = '';
+      const container = el('div',{class:'card pad'});
+      container.append(el('h2',{html:'Templates'}));
+
+      const markup = `
+        <div style="max-width:1100px;margin:0 auto">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div>
+              <label>Client Name</label>
+              <input id="tpl_clientName" class="input" placeholder="Enter client first name">
+              <label style="margin-top:12px">Client Email</label>
+              <input id="tpl_clientEmail" class="input" placeholder="Enter client email">
+              <label style="margin-top:12px">Select Template</label>
+              <select id="tpl_templateSelect" class="input"></select>
+
+              <div id="tpl_depositFields" class="extraFields" style="display:none;margin-top:12px">
+                <h4>Deposit Request Details</h4>
+                <label>Quote Total (£)</label><input id="tpl_quoteTotal_deposit" class="input" type="number">
+                <label>Deposit Total (£)</label><input id="tpl_depositTotal_deposit" class="input" type="number">
+                <label>Payment Link</label><input id="tpl_paymentLink_deposit" class="input" type="url" placeholder="https://…">
+              </div>
+
+              <div id="tpl_quoteSentFields" class="extraFields" style="display:none;margin-top:12px">
+                <h4>Quote Sent Details</h4>
+                <label>Quote Total (£)</label><input id="tpl_quoteTotal_quote" class="input" type="number">
+                <label>Deposit Total (£)</label><input id="tpl_depositTotal_quote" class="input" type="number">
+              </div>
+
+              <div id="tpl_bookingFields" class="extraFields" style="display:none;margin-top:12px">
+                <h4>Booking Details</h4>
+                <label>Booking Date</label><input id="tpl_bookingDate" class="input">
+                <label>Booking Time</label><input id="tpl_bookingTime" class="input">
+              </div>
+
+              <div id="tpl_signatureFields" class="extraFields" style="display:none;margin-top:12px">
+                <h4>Signature Request Details</h4>
+                <label>Signature Link</label><input id="tpl_signatureLink" class="input" placeholder="Paste signature link">
+                <label>Agreement Type</label>
+                <select id="tpl_agreementType" class="input"><option>Services Agreement</option><option>14 Day Cooling-Off Waiver</option><option>Payment Plan Agreement</option></select>
+              </div>
+            </div>
+
+            <div>
+              <label>Subject Preview</label>
+              <input id="tpl_subjectPreview" class="input" readonly>
+              <label style="margin-top:12px">Generated Message</label>
+              <textarea id="tpl_messageBox" class="input" rows="16" readonly></textarea>
+              <div style="display:flex;gap:8px;margin-top:12px">
+                <button class="btn btn-secondary" id="tpl_copyBtn">📋 Copy</button>
+                <button class="btn btn-primary" id="tpl_emailBtn">✉️ Open in Email App</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      container.innerHTML += markup; view.appendChild(container);
+
+      // Templates data (reuse the global templates object)
+      const sel = document.getElementById('tpl_templateSelect');
+      const msgBox = document.getElementById('tpl_messageBox');
+      const subj = document.getElementById('tpl_subjectPreview');
+
+      function populateList(){ sel.innerHTML = '<option value="">-- Choose a template --</option>'; const order = ["Quote Sent","Quote Reminder","Deposit Request","Services Agreement","Signature Request","Booking Confirmation","Wrap Day Prep","Thank You & Reviews"]; order.forEach(name=>{ if(templates[name]){ const o = document.createElement('option'); o.value = name; o.textContent = name; sel.appendChild(o); } }); }
+      populateList();
+
+      function update(){ const name = document.getElementById('tpl_clientName').value || 'Customer'; const selected = sel.value; if(selected && templates[selected]){ let msg = templates[selected].body.replace('{name}', name); let subject = templates[selected].subject; if(selected === 'Deposit Request'){ let q = document.getElementById('tpl_quoteTotal_deposit').value; let d = document.getElementById('tpl_depositTotal_deposit').value; const l = document.getElementById('tpl_paymentLink_deposit').value || '[Insert Link]'; const quote = q ? `£${q}` : '____'; const deposit = d ? `£${d}` : '____'; msg = msg.replace('{quoteTotal}', quote).replace('{depositTotal}', deposit).replace('{paymentLink}', l); }
+        if(selected === 'Quote Sent'){ let q = document.getElementById('tpl_quoteTotal_quote').value; let d = document.getElementById('tpl_depositTotal_quote').value; const quote = q ? `£${q}` : '____'; const deposit = d ? `£${d}` : '____'; msg = msg.replace('{quoteTotal}', quote).replace('{depositTotal}', deposit); }
+        if(selected === 'Booking Confirmation'){ const date = document.getElementById('tpl_bookingDate').value || '____'; const time = document.getElementById('tpl_bookingTime').value || '____'; msg = msg.replace('{bookingDate}', date).replace('{bookingTime}', time); }
+        if(selected === 'Signature Request'){ const link = document.getElementById('tpl_signatureLink').value || '[Insert Link]'; const agreement = document.getElementById('tpl_agreementType').value || 'Agreement'; msg = msg.replace('{signatureLink}', link).replace(/{agreementType}/g, agreement); subject = subject.replace('{agreementType}', agreement); }
+        msgBox.value = msg; msgBox.dataset.subject = subject; subj.value = subject; } else { msgBox.value = ''; subj.value = ''; }
+      }
+
+      sel.addEventListener('change', ()=>{ document.querySelectorAll('#tpl_depositFields,#tpl_quoteSentFields,#tpl_bookingFields,#tpl_signatureFields').forEach(d=>d.style.display='none'); if(sel.value==='Deposit Request') document.getElementById('tpl_depositFields').style.display='block'; if(sel.value==='Quote Sent') document.getElementById('tpl_quoteSentFields').style.display='block'; if(sel.value==='Booking Confirmation') document.getElementById('tpl_bookingFields').style.display='block'; if(sel.value==='Signature Request') document.getElementById('tpl_signatureFields').style.display='block'; update(); });
+
+      document.querySelectorAll('#tpl_clientName, #tpl_clientEmail, #tpl_quoteTotal_deposit, #tpl_depositTotal_deposit, #tpl_paymentLink_deposit, #tpl_quoteTotal_quote, #tpl_depositTotal_quote, #tpl_bookingDate, #tpl_bookingTime, #tpl_signatureLink, #tpl_agreementType').forEach(inp=>{ if(inp) inp.addEventListener('input', update); });
+
+      document.getElementById('tpl_copyBtn').addEventListener('click', ()=>{ if(!msgBox.value) return showToast('No message to copy!', 'error'); navigator.clipboard.writeText(msgBox.value).then(()=>showToast('Message copied to clipboard!')).catch(()=>showToast('Unable to access clipboard.', 'error')); });
+      document.getElementById('tpl_emailBtn').addEventListener('click', ()=>{ const email = document.getElementById('tpl_clientEmail').value; const selected = sel.value; if(!selected || !templates[selected]) return showToast('Please select a template first.', 'error'); const subject = msgBox.dataset.subject || templates[selected].subject; const body = encodeURIComponent(msgBox.value); if(email && body){ window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${body}`; } else { showToast('Please enter the client’s email and select a template.', 'error'); } });
+
+      return container;
     }
 
     /* Settings view */
@@ -2050,6 +2886,105 @@
 
     /************ Accessibility niceties ************/
     pinInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ tryUnlock(); }});
+  </script>
+
+  <!-- Firebase client initialization & helpers (optional, used if present) -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js';
+  import { getFirestore, collection, addDoc, getDocs, query, where, updateDoc, serverTimestamp, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js';
+  import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCnYFHzbR7iWbHvEj3hBq7mOBe7p7VBMSY",
+      authDomain: "elite-hq-6e0b7.firebaseapp.com",
+      projectId: "elite-hq-6e0b7",
+      // storageBucket normalized to the common appspot.com form (if your project uses a different bucket value, replace it with your exact value)
+      storageBucket: "elite-hq-6e0b7.appspot.com",
+      messagingSenderId: "454926724633",
+      appId: "1:454926724633:web:2a8c649dde977b7c94c488"
+    };
+
+    try{
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      // Initialize Auth and sign in anonymously so client can perform allowed writes under secure rules
+      try{
+        const auth = getAuth(app);
+        // expose current user to the app
+        window.FirebaseAuth = auth;
+        onAuthStateChanged(auth, (user) => {
+          window.FirebaseUser = user || null;
+          if(user) console.info('Firebase anonymous auth ready', user.uid);
+          else console.info('Firebase auth state: signed out');
+        });
+        // attempt anonymous sign-in if no user present
+        (async ()=>{
+          try{
+            if(!auth.currentUser){
+              await signInAnonymously(auth);
+              console.info('Anonymous sign-in succeeded');
+            }
+          }catch(e){ console.warn('Anonymous sign-in failed', e); }
+        })();
+      }catch(e){ console.warn('Auth init failed', e); }
+
+      function makeCode(len=6){ return Math.random().toString(36).substring(2,2+len).toUpperCase(); }
+
+      async function createReferral({ clientName, jobRef, jobTotal }){
+        const referralCode = makeCode(6);
+        const rec = { referralCode, clientName: clientName||'', jobRef: jobRef||'', jobTotal: Number(jobTotal)||0, used:false, createdAt: serverTimestamp() };
+        const r = await addDoc(collection(db,'referrals'), rec);
+        return { id: r.id, ...rec };
+      }
+
+      async function listReferrals(){
+        const snap = await getDocs(collection(db,'referrals'));
+        return snap.docs.map(d=>({ id:d.id, ...d.data() }));
+      }
+
+      async function getReferralByCode(code){
+        const q = query(collection(db,'referrals'), where('referralCode','==', code));
+        const snap = await getDocs(q);
+        if(snap.empty) return null;
+        return { id: snap.docs[0].id, ...snap.docs[0].data() };
+      }
+
+      async function useReferralCode(code, newClientName){
+        const q = query(collection(db,'referrals'), where('referralCode','==', code));
+        const snap = await getDocs(q);
+        if(snap.empty) throw new Error('Code not found');
+        const d = snap.docs[0]; const data = d.data();
+        if(data.used) throw new Error('Code already used');
+        await updateDoc(d.ref, { used:true, usedBy: newClientName, usedDate: serverTimestamp() });
+        return { id: d.id, ...data, used:true, usedBy: newClientName };
+      }
+
+      async function saveSignature(payload){ // payload: { name, email, address, ref, reason, signatureDataUrl, ip }
+        const rec = { ...payload, createdAt: serverTimestamp() };
+        const r = await addDoc(collection(db,'signatures'), rec);
+        return { id: r.id, ...rec };
+      }
+
+      // Save/load general Elite-HQ settings/document to Firestore under collection 'elitehq' doc 'settings'
+      // Note: This is a simple client-side helper. For sensitive operations, use authenticated/secured endpoints and Firestore rules.
+      async function saveHQData(data){
+        const ref = doc(db, 'elitehq', 'settings');
+        await setDoc(ref, { data: data || {}, updatedAt: serverTimestamp() }, { merge: true });
+        return true;
+      }
+
+      async function loadHQData(){
+        const ref = doc(db, 'elitehq', 'settings');
+        const snap = await getDoc(ref);
+        if(!snap.exists()) return null;
+        return snap.data();
+      }
+
+      async function listTemplates(){ const snap = await getDocs(collection(db,'templates')); return snap.docs.map(d=>({ id:d.id, ...d.data() })); }
+
+  window.FirebaseHelpers = { createReferral, listReferrals, getReferralByCode, useReferralCode, saveSignature, listTemplates, saveHQData, loadHQData };
+      console.info('FirebaseHelpers initialized');
+    }catch(e){ console.warn('Firebase init failed', e); }
   </script>
 </body>
 </html>

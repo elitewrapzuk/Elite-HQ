@@ -1,0 +1,15 @@
+{
+  "name": "elite-hq-functions",
+  "version": "1.0.0",
+  "description": "Cloud Functions for Elite HQ - referral helpers",
+  "engines": { "node": "18" },
+  "main": "index.js",
+  "scripts": {
+    "start": "firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions:useReferral"
+  },
+  "dependencies": {
+    "firebase-admin": "~11.10.0",
+    "firebase-functions": "~4.4.0"
+  }
+}
