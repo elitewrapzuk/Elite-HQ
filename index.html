@@ -675,6 +675,90 @@
       }catch(e){ console.warn('Could not wrap Store.set', e); }
 
       // migration helper: merge another backup doc into the current user's backup
+      // stable stringify that sorts object keys (used to compare item equality reliably)
+      function stableStringify(obj){
+        if(obj === null || typeof obj !== 'object') return JSON.stringify(obj);
+        if(Array.isArray(obj)) return '[' + obj.map(stableStringify).join(',') + ']';
+        const keys = Object.keys(obj).sort();
+        return '{' + keys.map(k=> JSON.stringify(k) + ':' + stableStringify(obj[k])).join(',') + '}';
+      }
+
+      // three-way merge: dest = current cloud doc, src = source doc to merge from, old = last applied cloud snapshot
+      function threeWayMergeCollection(destArr, srcArr, oldArr){
+        const res = [];
+        const mapDest = new Map(); const mapSrc = new Map(); const mapOld = new Map();
+        (destArr||[]).forEach(i=>{ if(i && i.id) mapDest.set(i.id, i); else res.push(i); });
+        (srcArr||[]).forEach(i=>{ if(i && i.id) mapSrc.set(i.id, i); else res.push(i); });
+        (oldArr||[]).forEach(i=>{ if(i && i.id) mapOld.set(i.id, i); });
+
+        // union of ids
+        const ids = new Set([...mapDest.keys(), ...mapSrc.keys(), ...mapOld.keys()]);
+        ids.forEach(id=>{
+          const d = mapDest.get(id); const s = mapSrc.get(id); const o = mapOld.get(id);
+          if(s && !d && !o){ // new in src
+            res.push(s); return;
+          }
+          if(s && d){
+            const ds = stableStringify(d); const ss = stableStringify(s);
+            if(ds === ss){ res.push(d); return; }
+            // prefer item with later updatedAt if present
+            const dTs = d.updatedAt ? (new Date(d.updatedAt)).getTime() : 0;
+            const sTs = s.updatedAt ? (new Date(s.updatedAt)).getTime() : 0;
+            if(dTs || sTs){ res.push(dTs >= sTs ? d : s); return; }
+            // if old exists, check which side changed since old
+            if(o){ const os = stableStringify(o); if(os === ds && os !== ss){ res.push(s); return; } if(os === ss && os !== ds){ res.push(d); return; } }
+            // fallback: prefer src (incoming) to ensure latest remote changes are applied
+            res.push(s); return;
+          }
+          if(!s && d){
+            // item present in dest but absent in src. if old had it and dest == old -> remote deleted it -> delete locally
+            if(o){ const ds = stableStringify(d); const os = stableStringify(o); if(ds === os){ /* deleted remotely */ return; } }
+            // otherwise keep local dest
+            res.push(d); return;
+          }
+          if(s && !d){
+            // item present in src but not dest: add
+            res.push(s); return;
+          }
+        });
+        return res;
+      }
+
+      // compute diffs between two collections (oldArr -> newArr)
+      function computeCollectionDiff(oldArr, newArr){
+        const oldMap = new Map(); const newMap = new Map();
+        (oldArr||[]).forEach(i=>{ if(i && i.id) oldMap.set(i.id, i); });
+        (newArr||[]).forEach(i=>{ if(i && i.id) newMap.set(i.id, i); });
+        const added = [], removed = [], edited = [];
+        // added
+        for(const [id,item] of newMap.entries()){ if(!oldMap.has(id)) added.push(item); }
+        // removed
+        for(const [id,item] of oldMap.entries()){ if(!newMap.has(id)) removed.push(item); }
+        // edited
+        for(const [id,item] of newMap.entries()){ if(oldMap.has(id)){ const o = oldMap.get(id); if(stableStringify(o) !== stableStringify(item)) edited.push({ before: o, after: item }); } }
+        return { added, edited, removed };
+      }
+
+      // show a human-friendly changelog modal summarising adds/edits/removes per collection
+      function showChangeLog(changes){
+        try{
+          const body = el('div',{},[]);
+          Object.keys(changes).forEach(coll => {
+            const c = changes[coll];
+            const header = el('div',{style:'margin-bottom:6px;font-weight:800'},[document.createTextNode(`${coll} — Added ${c.added.length}, Edited ${c.edited.length}, Removed ${c.removed.length}`)]);
+            body.append(header);
+            const listWrap = el('div',{style:'margin-bottom:12px;border:1px solid var(--line);padding:8px;border-radius:8px;background:var(--surface);max-height:180px;overflow:auto'});
+            if(c.added.length){ listWrap.append(el('div',{style:'font-weight:700;margin-bottom:6px'},[document.createTextNode('Added:')])); c.added.slice(0,30).forEach(it=>{ const label = it.name || it.clientName || it.title || it.id || JSON.stringify(it).slice(0,60); listWrap.append(el('div',{style:'padding:6px 0;border-top:1px dashed var(--line);font-size:13px'},[document.createTextNode(String(label))])); }); }
+            if(c.edited.length){ listWrap.append(el('div',{style:'font-weight:700;margin-top:6px;margin-bottom:6px'},[document.createTextNode('Edited:')])); c.edited.slice(0,30).forEach(pair=>{ const beforeLabel = pair.before && (pair.before.name||pair.before.clientName||pair.before.title||pair.before.id) || JSON.stringify(pair.before).slice(0,40); const afterLabel = pair.after && (pair.after.name||pair.after.clientName||pair.after.title||pair.after.id) || JSON.stringify(pair.after).slice(0,40); listWrap.append(el('div',{style:'padding:6px 0;border-top:1px dashed var(--line);font-size:13px'},[document.createTextNode(beforeLabel+' → '+afterLabel)])); }); }
+            if(c.removed.length){ listWrap.append(el('div',{style:'font-weight:700;margin-top:6px;margin-bottom:6px'},[document.createTextNode('Removed:')])); c.removed.slice(0,30).forEach(it=>{ const label = it.name || it.clientName || it.title || it.id || JSON.stringify(it).slice(0,60); listWrap.append(el('div',{style:'padding:6px 0;border-top:1px dashed var(--line);font-size:13px'},[document.createTextNode(String(label))])); }); }
+            // if nothing changed, show a muted note
+            if(!c.added.length && !c.edited.length && !c.removed.length){ listWrap.append(el('div',{class:'muted',style:'padding:6px 0'},[document.createTextNode('No changes in this collection')])) }
+            body.append(listWrap);
+          });
+          openModal('Change Log — Migration result', body, ()=> true, 'Close', { className: 'wide' });
+        }catch(e){ console.error('ShowChangeLog failed', e); }
+      }
+
       async function migrateFrom(oldDocId){
         if(!oldDocId) { showCloudStatus('Provide source doc id'); return; }
         if(!firebaseReady || !fbDocRef){ showCloudStatus('Not connected'); return; }
@@ -688,24 +772,20 @@
           const destSnap = await fbDocRef.get();
           const dest = destSnap.exists ? (destSnap.data() || {}) : {};
 
+          const oldRaw = Store.get('ew_cloud_snapshot', null);
+          const old = oldRaw ? JSON.parse(oldRaw) : {};
+
           const merged = Object.assign({}, dest);
           ['contacts','projects','suppliers','referrals','calendarEvents'].forEach(key => {
-            const a = Array.isArray(dest[key]) ? dest[key].slice() : [];
-            const b = Array.isArray(src[key]) ? src[key].slice() : [];
-            // merge with simple de-dup by id when available
-            b.forEach(item => {
-              try{
-                if(item && item.id){ if(!a.find(x=>x && x.id === item.id)) a.push(item); }
-                else a.push(item);
-              }catch(e){ a.push(item); }
-            });
-            merged[key] = a;
+            merged[key] = threeWayMergeCollection(dest[key]||[], src[key]||[], old && old[key] ? old[key] : []);
           });
           merged.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
           await fbDocRef.set(merged, { merge: true });
           showCloudStatus('Migration complete — merged');
           // refresh local from cloud
-          try{ const newSnap = await fbDocRef.get(); if(newSnap.exists){ suppressLocalSync = true; const d = newSnap.data() || {}; if(d.contacts) { Store.set('ew_contacts', d.contacts); db.contacts = d.contacts; } if(d.projects) { Store.set('ew_projects', d.projects); db.projects = d.projects; } if(d.suppliers) { Store.set('ew_suppliers', d.suppliers); db.suppliers = d.suppliers; } if(d.referrals) { Store.set('ew_referrals', d.referrals); db.referrals = d.referrals; } if(d.calendarEvents) { Store.set('ew_calendar', d.calendarEvents); db.calendarEvents = d.calendarEvents; } persist(); setTimeout(()=> suppressLocalSync=false,500); }
+          try{ const newSnap = await fbDocRef.get(); if(newSnap.exists){ suppressLocalSync = true; const d = newSnap.data() || {}; if(d.contacts) { Store.set('ew_contacts', d.contacts); db.contacts = d.contacts; } if(d.projects) { Store.set('ew_projects', d.projects); db.projects = d.projects; } if(d.suppliers) { Store.set('ew_suppliers', d.suppliers); db.suppliers = d.suppliers; } if(d.referrals) { Store.set('ew_referrals', d.referrals); db.referrals = d.referrals; } if(d.calendarEvents) { Store.set('ew_calendar', d.calendarEvents); db.calendarEvents = d.calendarEvents; } // update cloud snapshot
+            try{ Store.set('ew_cloud_snapshot', JSON.stringify(d)); if(d.updatedAt && d.updatedAt.toDate) Store.set('ew_cloud_updatedAt', d.updatedAt.toDate().toISOString()); }catch(e){}
+            persist(); setTimeout(()=> suppressLocalSync=false,500); }
           }catch(e){}
         }catch(e){ console.error('Migration failed', e); showCloudStatus('Migration failed'); }
       }
