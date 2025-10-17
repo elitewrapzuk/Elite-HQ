@@ -478,6 +478,10 @@
 
     /* Firebase backup & sync helper */
     (function setupFirebaseSync(){
+      // ensure a global holder exists early so console checks won't fail if script executed partially
+      window.EL_FIREBASE = window.EL_FIREBASE || {};
+      // build id — updated on each commit to help debugging
+      window.EL_FIREBASE._build = '7c3601e';
       // Paste your firebase config here (you provided this to me)
       const FIREBASE_CONFIG = {
         apiKey: "AIzaSyCnYFHzbR7iWbHvEj3hBq7mOBe7p7VBMSY",
