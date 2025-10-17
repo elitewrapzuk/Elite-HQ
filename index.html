@@ -1386,6 +1386,51 @@
       })();
 
       const logoFile = document.getElementById('logoFile');
+
+      // --- Backup scanner: find recent docs in backups collection and show preview/merge buttons ---
+      (function insertBackupScanner(){
+        try{
+          const parentCard = document.querySelector('.card.pad [id="cloudSyncStateTop"]')?.closest('.card');
+          if(!parentCard) return;
+          const sc = document.createElement('div'); sc.style = 'margin-top:12px';
+          sc.innerHTML = `
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <button class="chip" id="scanBackupsBtn">Scan backups</button>
+              <span class="muted" id="scanStatus">&nbsp;</span>
+            </div>
+            <div id="backupList"></div>
+          `;
+          parentCard.appendChild(sc);
+          const scanBtn = document.getElementById('scanBackupsBtn');
+          const scanStatus = document.getElementById('scanStatus');
+          const backupList = document.getElementById('backupList');
+          if(!scanBtn) return;
+          scanBtn.addEventListener('click', async ()=>{
+            scanStatus.textContent = 'Scanning…'; backupList.innerHTML='';
+            try{
+              const fdb = firebase.firestore();
+              const snaps = await fdb.collection('backups').get();
+              const docs = snaps.docs.map(d=> ({ id: d.id, data: d.data() }) );
+              // sort by updatedAt (if present) descending, fallback to doc id
+              docs.sort((a,b)=>{ const ta = a.data.updatedAt && a.data.updatedAt.toDate ? a.data.updatedAt.toDate().getTime() : 0; const tb = b.data.updatedAt && b.data.updatedAt.toDate ? b.data.updatedAt.toDate().getTime() : 0; return tb - ta || (a.id > b.id ? -1 : 1); });
+              if(!docs.length){ scanStatus.textContent='No backups found'; return; }
+              scanStatus.textContent = `Found ${docs.length}`;
+              docs.forEach(doc=>{
+                const row = document.createElement('div'); row.className='card pad'; row.style='margin-bottom:8px;display:flex;justify-content:space-between;align-items:center';
+                const left = document.createElement('div'); left.innerHTML = `<div style="font-weight:700">${doc.id}</div><div class="muted" style="font-size:12px">${(doc.data.updatedAt&&doc.data.updatedAt.toDate)?doc.data.updatedAt.toDate().toISOString():'no timestamp'}</div>`;
+                const counts = ['contacts','projects','suppliers','referrals','calendarEvents'].map(k=> `${k}:${(doc.data[k]||[]).length}` ).join(' • ');
+                left.innerHTML += `<div style="margin-top:6px;font-size:13px">${counts}</div>`;
+                const actions = document.createElement('div'); actions.style='display:flex;gap:8px;align-items:center';
+                const preview = document.createElement('button'); preview.className='chip'; preview.textContent='Preview'; preview.addEventListener('click', ()=>{ showToast(counts); });
+                const merge = document.createElement('button'); merge.className='chip'; merge.textContent='Merge'; merge.addEventListener('click', async ()=>{ if(!confirm('Merge this doc into your active backup?')) return; try{ await window.EL_FIREBASE.migrateFrom(doc.id); showToast('Merged'); }catch(e){ console.error(e); showToast('Merge failed'); } });
+                actions.append(preview, merge);
+                row.append(left, actions);
+                backupList.appendChild(row);
+              });
+            }catch(e){ console.error(e); scanStatus.textContent='Error scanning'; showToast('Scan failed'); }
+          });
+        }catch(e){ /* ignore */ }
+      })();
       const settingsLogoImg = document.getElementById('settingsLogoImg');
   function showLogo(dataUrl){ settingsLogoImg.style.display = dataUrl ? 'block' : 'none'; settingsLogoImg.src = dataUrl || ''; }
       showLogo(cfg.logoDataUrl);
