@@ -464,12 +464,13 @@
       Store.set('ew_calendar', db.calendarEvents);
       // Mirror local changes to Firestore for cross-device backups (safe no-op if Firebase not ready)
       try{
-        // simple debounce to avoid frequent writes
+        // simple debounce to avoid frequent writes; only update the lastBackupAt when we actually call saveHQData
         if(!window._ew_lastBackupAt) window._ew_lastBackupAt = 0;
         const now = Date.now();
         if(now - window._ew_lastBackupAt > 3000){
-          window._ew_lastBackupAt = now;
           if(window.FirebaseHelpers && typeof window.FirebaseHelpers.saveHQData === 'function'){
+            // mark the time now to debounce subsequent saves
+            window._ew_lastBackupAt = now;
             // fire-and-forget backup; merge on server via setDoc in saveHQData
             window.FirebaseHelpers.saveHQData({
               links: db.links,
@@ -481,6 +482,8 @@
               console.info('Auto-backup: elitehq/settings saved');
             }).catch(err=>{
               console.warn('Auto-backup failed', err);
+              // if it failed, reset the lastBackupAt so we can retry sooner
+              window._ew_lastBackupAt = 0;
             });
           }
         }
