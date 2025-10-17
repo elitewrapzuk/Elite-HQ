@@ -549,6 +549,8 @@
             if(data.referrals) { Store.set('ew_referrals', data.referrals); db.referrals = data.referrals; }
             if(data.calendarEvents) { Store.set('ew_calendar', data.calendarEvents); db.calendarEvents = data.calendarEvents; }
             persist();
+            // store cloud updatedAt locally for comparison (if present)
+            try{ if(data.updatedAt && data.updatedAt.toDate){ Store.set('ew_cloud_updatedAt', data.updatedAt.toDate().toISOString()); } }catch(e){}
             showCloudStatus('Synced from cloud');
           }catch(e){ console.error('Apply remote failed', e); showCloudStatus('Apply remote failed'); }
           setTimeout(()=> suppressLocalSync = false, 500);
@@ -571,8 +573,10 @@
               attachDocListener(fdb, uid);
               firebaseReady = true;
                 showCloudStatus('Connected');
-                // If any Store.set happened before Firebase was ready, perform a pending backup now
-                try{ if(window._pendingBackup){ window._pendingBackup = false; doBackupNow(); } }catch(e){}
+              // If any Store.set happened before Firebase was ready, perform a pending backup now
+              try{ if(window._pendingBackup){ window._pendingBackup = false; doBackupNow(); } }catch(e){}
+              // After connecting, attempt to auto-import the most recently edited backup across the collection
+              try{ findLatestBackupAndMaybeImport(fdb, uid); }catch(e){}
             } else {
               // not signed-in yet — attempt anonymous sign-in
               auth.signInAnonymously().catch(err => { console.error('Auth err', err); showCloudStatus('Auth error'); });
@@ -596,6 +600,33 @@
       }, 800);
 
       function backupNow(){ doBackupNow(); }
+      // find the most recent backup doc across the collection and import if it's newer than local
+      async function findLatestBackupAndMaybeImport(fdb, currentUid){
+        try{
+          const snaps = await fdb.collection('backups').get();
+          const docs = snaps.docs.map(d=> ({ id: d.id, data: d.data() }) ).filter(d=>d && d.data);
+          if(!docs.length) return;
+          // determine doc with largest updatedAt timestamp
+          docs.forEach(d=>{ d.updatedMs = d.data.updatedAt && d.data.updatedAt.toDate ? d.data.updatedAt.toDate().getTime() : 0; });
+          docs.sort((a,b)=> b.updatedMs - a.updatedMs);
+          const newest = docs[0];
+          // store last scan results (for Settings highlight)
+          window._lastBackupScan = docs;
+          // check locally stored cloud updatedAt
+          const localTs = Store.get('ew_cloud_updatedAt', null);
+          const localMs = localTs ? (new Date(localTs)).getTime() : 0;
+          if(newest.updatedMs > localMs){
+            // If newest is the user's own doc, no need to merge — but ensure it's applied
+            if(newest.id === currentUid){
+              // it's already attached via listener; nothing further required
+              return;
+            }
+            // Otherwise, auto-merge newest into the active user's backup
+            try{ await migrateFrom(newest.id); showCloudStatus('Auto-merged latest backup'); }
+            catch(e){ console.error('Auto-merge failed', e); }
+          }
+        }catch(e){ console.error('findLatestBackupAndMaybeImport failed', e); }
+      }
       function restoreNow(){
         if(!firebaseReady || !fbDocRef) { showCloudStatus('Not connected'); return; }
         fbDocRef.get().then(snap => {
