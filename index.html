@@ -2911,6 +2911,8 @@
               el('div',{style:'height:6px'}),
               el('div',{class:'muted',html:preview})
             ]);
+            // attach data attribute so delegated handlers can find the log
+            try{ if(log && log.id) item.setAttribute('data-log-id', String(log.id)); }catch(e){}
             // Add robust click and keyboard handlers so nested elements don't prevent opening
             item.addEventListener('click', (e)=>{ try{ viewLogModal(log); }catch(err){ console.error(err); } });
             item.tabIndex = 0;
@@ -2918,6 +2920,36 @@
             feedWrap.append(item);
           });
         });
+        // attach delegated handlers once to the feed container to handle clicks/keys reliably
+        try{
+          if(!feedWrap._delegationAttached){
+            feedWrap.addEventListener('click', (ev)=>{
+              try{
+                // ignore clicks on interactive controls inside the card (buttons, links, inputs)
+                if(ev.target.closest && ev.target.closest('button, a, input, textarea, select, label')) return;
+                const card = ev.target.closest && ev.target.closest('.card.pad');
+                if(card && card.dataset && card.dataset.logId){
+                  const id = card.dataset.logId;
+                  const log = (db.logs||[]).find(l=> String(l.id) === String(id));
+                  if(log) viewLogModal(log);
+                }
+              }catch(e){ /* silent */ }
+            });
+            feedWrap.addEventListener('keydown', (ev)=>{
+              try{
+                if(ev.key !== 'Enter' && ev.key !== ' ') return;
+                const card = ev.target.closest && ev.target.closest('.card.pad');
+                if(card && card.dataset && card.dataset.logId){
+                  ev.preventDefault();
+                  const id = card.dataset.logId;
+                  const log = (db.logs||[]).find(l=> String(l.id) === String(id));
+                  if(log) viewLogModal(log);
+                }
+              }catch(e){}
+            });
+            feedWrap._delegationAttached = true;
+          }
+        }catch(e){}
       }
 
       function refresh(){
