@@ -2769,14 +2769,21 @@
       function renderList(items){
         feedWrap.innerHTML = '';
         if(!items || !items.length) { feedWrap.append(el('div',{class:'empty',html:'No logs yet.'})); return; }
-        // Helper to convert createdAt to JS Date (handles Firestore Timestamp)
-        function toDate(v){ if(!v) return new Date(0); if(v && typeof v.toDate === 'function') return v.toDate(); return new Date(v); }
+        // Robust log date extraction (prefer createdAt, fallback to modifiedAt/updatedAt)
+        function getLogDate(log){
+          const cand = log && (log.createdAt || log.created_at || log.modifiedAt || log.modified_at || log.updatedAt || log.updated_at);
+          if(!cand) return new Date(0);
+          if(cand && typeof cand.toDate === 'function') return cand.toDate();
+          const d = new Date(cand);
+          if(isNaN(d.getTime())) return new Date(0);
+          return d;
+        }
         // Sort items newest-first by createdAt
-        const sorted = (items||[]).slice().sort((a,b)=> toDate(b.createdAt).getTime() - toDate(a.createdAt).getTime());
+  const sorted = (items||[]).slice().sort((a,b)=> getLogDate(b).getTime() - getLogDate(a).getTime());
         // Group by month-year key
         const groups = {};
         sorted.forEach(log=>{
-          const d = toDate(log.createdAt);
+          const d = getLogDate(log);
           const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
           if(!groups[key]) groups[key] = { date: d, items: [] };
           groups[key].items.push(log);
@@ -2785,9 +2792,20 @@
         const colors = ['#01FABF','#00B5FF','#FFB400','#FF6B6B','#8A5FFF','#00C2A8','#FFC1E3'];
         // Order groups newest-first
         const groupKeys = Object.keys(groups).sort((a,b)=> groups[b].date - groups[a].date);
+        // helper to format month-year safely
+        function formatMonthYear(d){
+          try{
+            let dt = d;
+            if(!dt) return 'Unknown';
+            if(typeof dt.toDate === 'function') dt = dt.toDate();
+            if(!(dt instanceof Date)) dt = new Date(dt);
+            if(isNaN(dt.getTime())) return 'Unknown';
+            return dt.toLocaleString(undefined,{month:'long', year:'numeric'});
+          }catch(e){ return 'Unknown'; }
+        }
         groupKeys.forEach((gk, idx)=>{
           const grp = groups[gk];
-          const monthLabel = grp.date.toLocaleString(undefined,{month:'long', year:'numeric'});
+          const monthLabel = formatMonthYear(grp.date) + ' — ' + (grp.items.length || 0) + ' logs';
           const color = colors[idx % colors.length];
           // month divider
           const divider = el('div',{class:'month-divider',style:`background:${color};color:#fff;padding:8px;border-radius:8px;margin:12px 0;`},[ el('strong',{html:monthLabel}) ]);
@@ -2799,11 +2817,15 @@
               el('div',{html:`<strong>${log.title}</strong> • <span class="muted">${log.contactName || log.contactId || 'Unlinked'}</span>`}),
               el('div',{},[ el('button',{class:'btn sm',onclick:(e)=>{ e.stopPropagation(); openEditLogModal(log); }},[document.createTextNode('Edit')]) ])
             ]);
-            const item = el('div',{class:'card pad',style:'margin-bottom:8px;cursor:pointer',onclick:()=> viewLogModal(log)},[
+            const item = el('div',{class:'card pad',style:'margin-bottom:8px;cursor:pointer'},[
               header,
               el('div',{style:'height:6px'}),
               el('div',{class:'muted',html:preview})
             ]);
+            // Add robust click and keyboard handlers so nested elements don't prevent opening
+            item.addEventListener('click', (e)=>{ try{ viewLogModal(log); }catch(err){ console.error(err); } });
+            item.tabIndex = 0;
+            item.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); viewLogModal(log); } });
             feedWrap.append(item);
           });
         });
@@ -2881,7 +2903,7 @@
     }
 
     function viewLogModal(log){
-      const ts = log.createdAt ? (formatDate(log.createdAt)) : '';
+  const ts = formatDate(getLogDate(log));
       const header = el('div',{style:'display:flex;justify-content:space-between;align-items:center'},[
         el('div',{html:`<strong>${log.title}</strong>`}),
         el('div',{class:'muted',html:ts})
