@@ -19,9 +19,9 @@
       --shadow-md:0 10px 30px rgba(2,6,23,.08);
       --focus:0 0 0 3px rgba(1,250,191,.35);
       --banner-grad:linear-gradient(90deg,#01FABF,#00B5FF);
-      --nav-hover:#eef3f8;
-      --btn:#0f172a;
-      --btn-ink:#ffffff;
+    --nav-hover:#eef3f8;
+  --btn: var(--brand);
+  --btn-ink:#ffffff;
       --glass-ring:inset 0 1px 0 rgba(255,255,255,.6), inset 0 -1px 0 rgba(0,0,0,.03);
     }
     [data-theme="dark"]{
@@ -351,6 +351,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 </head>
 <body>
   <div class="app">
@@ -363,7 +364,7 @@
   <a href="#/dashboard" data-route="dashboard" class="active"><span class="ico" data-ico="home"></span>Dashboard</a>
   <a href="#/contacts" data-route="contacts"><span class="ico" data-ico="user"></span>Contacts</a>
   <a href="#/referrals" data-route="referrals"><span class="ico" data-ico="star"></span>Referrals</a>
-  <a href="#/projects" data-route="projects"><span class="ico" data-ico="folder"></span>Projects</a>
+    <a href="#/logs" data-route="logs"><span class="ico" data-ico="doc"></span>Logs</a>
   <a href="#/calendar" data-route="calendar"><span class="ico" data-ico="calendar"></span>Calendar</a>
   <a href="#/suppliers" data-route="suppliers"><span class="ico" data-ico="shield"></span>Suppliers</a>
   <div class="nav-group" data-group="email">
@@ -505,6 +506,7 @@
       contacts: Store.get('ew_contacts',[]),
       referrals: Store.get('ew_referrals',[]),
       projects: Store.get('ew_projects',[]),
+      logs: Store.get('ew_logs',[]),
       suppliers: Store.get('ew_suppliers',[]),
       calendarEvents: Store.get('ew_calendar',[])
     };
@@ -513,6 +515,7 @@
       Store.set('ew_contacts', db.contacts);
       Store.set('ew_referrals', db.referrals);
       Store.set('ew_projects', db.projects);
+      Store.set('ew_logs', db.logs);
       Store.set('ew_suppliers', db.suppliers);
       Store.set('ew_calendar', db.calendarEvents);
     }
@@ -558,6 +561,8 @@
           try{
             if(data.contacts) { Store.set('ew_contacts', data.contacts); db.contacts = data.contacts; }
             if(data.projects) { Store.set('ew_projects', data.projects); db.projects = data.projects; }
+            if(data.logs) { Store.set('ew_logs', data.logs); db.logs = data.logs; }
+            if(data.emailTemplates) { try{ Store.set('ew_email_templates', data.emailTemplates); }catch(e){} }
             if(data.suppliers) { Store.set('ew_suppliers', data.suppliers); db.suppliers = data.suppliers; }
             if(data.referrals) { Store.set('ew_referrals', data.referrals); db.referrals = data.referrals; }
             if(data.calendarEvents) { Store.set('ew_calendar', data.calendarEvents); db.calendarEvents = data.calendarEvents; }
@@ -587,6 +592,9 @@
               const docToUse = storedDocId || uid;
               if(fbDocRef && fbDocRef.id === docToUse && firebaseReady){ showCloudStatus('Connected'); return; }
               attachDocListener(fdb, docToUse);
+              // start listening to centralized logs collection so UI updates in real-time
+              try{ if(window.EL_FIREBASE && typeof window.EL_FIREBASE.listenToLogsCollection === 'function'){ window.EL_FIREBASE.listenToLogsCollection(); } }
+              catch(e){ /* ignore */ }
               firebaseReady = true;
                 showCloudStatus('Connected');
               // If any Store.set happened before Firebase was ready, perform a pending backup now
@@ -606,6 +614,8 @@
         const payload = {
           contacts: db.contacts || [],
           projects: db.projects || [],
+          logs: db.logs || [],
+          emailTemplates: Store.get('ew_email_templates', {}),
           suppliers: db.suppliers || [],
           referrals: db.referrals || [],
           calendarEvents: db.calendarEvents || [],
@@ -778,7 +788,7 @@
           const old = oldRaw ? JSON.parse(oldRaw) : {};
 
           const merged = Object.assign({}, dest);
-          ['contacts','projects','suppliers','referrals','calendarEvents'].forEach(key => {
+          ['contacts','projects','logs','suppliers','referrals','calendarEvents'].forEach(key => {
             merged[key] = threeWayMergeCollection(dest[key]||[], src[key]||[], old && old[key] ? old[key] : []);
           });
           merged.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
@@ -787,13 +797,52 @@
           // refresh local from cloud
           try{ const newSnap = await fbDocRef.get(); if(newSnap.exists){ suppressLocalSync = true; const d = newSnap.data() || {}; if(d.contacts) { Store.set('ew_contacts', d.contacts); db.contacts = d.contacts; } if(d.projects) { Store.set('ew_projects', d.projects); db.projects = d.projects; } if(d.suppliers) { Store.set('ew_suppliers', d.suppliers); db.suppliers = d.suppliers; } if(d.referrals) { Store.set('ew_referrals', d.referrals); db.referrals = d.referrals; } if(d.calendarEvents) { Store.set('ew_calendar', d.calendarEvents); db.calendarEvents = d.calendarEvents; } // update cloud snapshot
             try{ Store.set('ew_cloud_snapshot', JSON.stringify(d)); if(d.updatedAt && d.updatedAt.toDate) Store.set('ew_cloud_updatedAt', d.updatedAt.toDate().toISOString()); }catch(e){}
+            if(d.logs){ try{ Store.set('ew_logs', d.logs); db.logs = d.logs; }catch(e){} }
             persist(); setTimeout(()=> suppressLocalSync=false,500); }
           }catch(e){}
         }catch(e){ console.error('Migration failed', e); showCloudStatus('Migration failed'); }
       }
 
+      // Firebase Storage helper for attachments
+      async function uploadAttachment(file, pathPrefix = 'logs'){
+        if(!window.firebase || !firebase.storage) throw new Error('Firebase storage not available');
+        const storage = firebase.storage();
+        const filename = `${pathPrefix}/${Date.now()}_${file.name.replace(/[^a-z0-9.-_]/gi,'_')}`;
+        const ref = storage.ref().child(filename);
+        const snap = await ref.put(file);
+        const url = await snap.ref.getDownloadURL();
+        return { name: file.name, url };
+      }
+
+      // Firestore logs collection helpers
+      let logsUnsubscribe = null;
+      function listenToLogsCollection(onChange){
+        try{
+          if(!firebase || !firebase.firestore) return;
+          const fdb = firebase.firestore();
+          if(typeof logsUnsubscribe === 'function') logsUnsubscribe();
+          logsUnsubscribe = fdb.collection('logs').orderBy('createdAt','desc').onSnapshot(snap=>{
+            const items = [];
+            snap.forEach(doc=>{ const d = doc.data(); d.id = doc.id; items.push(d); });
+            // update local store and db.logs with newest data
+            suppressLocalSync = true;
+            try{ Store.set('ew_logs', items); db.logs = items; }catch(e){}
+            setTimeout(()=> suppressLocalSync=false, 300);
+            if(typeof onChange === 'function') onChange(items);
+          }, err=>{ console.error('Logs listen err', err); });
+        }catch(e){ console.error('listenToLogsCollection failed', e); }
+      }
+
+      async function createLogEntry(payload){
+        if(!firebase || !firebase.firestore) throw new Error('Firestore not available');
+        const fdb = firebase.firestore();
+        const now = firebase.firestore.FieldValue.serverTimestamp();
+        const doc = await fdb.collection('logs').add(Object.assign({}, payload, { createdAt: now, modifiedAt: now }));
+        return doc.id;
+      }
+
   // expose helper functions globally so Settings UI can call them — merge onto existing object to preserve debug fields
-  window.EL_FIREBASE = Object.assign(window.EL_FIREBASE || {}, { initFirebase, backupNow, restoreNow, showCloudStatus, migrateFrom, findLatestBackupAndMaybeImport });
+  window.EL_FIREBASE = Object.assign(window.EL_FIREBASE || {}, { initFirebase, backupNow, restoreNow, showCloudStatus, migrateFrom, findLatestBackupAndMaybeImport, uploadAttachment, createLogEntry, listenToLogsCollection });
 
       // init on load (give the page a second to finish wiring)
       setTimeout(()=>{ try{ initFirebase(); }catch(e){ console.error(e); } }, 800);
@@ -908,7 +957,7 @@
     }
 
     /************ Router ************/
-  const routes = { dashboard: renderDashboard, contacts: renderContacts, referrals: renderReferrals, projects: renderProjects, calendar: renderCalendar, suppliers: renderSuppliers, email: renderEmail, 'email-templates': renderEmailTemplates, quote: renderQuote, optimiser: renderOptimiser, signatures: renderSignatures, 'remote-sign': renderRemoteSign, 'remote-quote': renderRemoteQuote, settings: renderSettings };
+  const routes = { dashboard: renderDashboard, contacts: renderContacts, referrals: renderReferrals, logs: renderLogs, calendar: renderCalendar, suppliers: renderSuppliers, email: renderEmail, 'email-templates': renderEmailTemplates, quote: renderQuote, optimiser: renderOptimiser, signatures: renderSignatures, 'remote-sign': renderRemoteSign, 'remote-quote': renderRemoteQuote, settings: renderSettings };
 
     // External tool embed helper
     function embedExternal(url, title){
@@ -1109,11 +1158,16 @@
             </div>
 
             <!-- Template Selection -->
-            <div style="margin-bottom: 18px;">
-              <label style="display: block; font-weight: 600; margin-bottom: 8px;" for="templateSelect">Select Template</label>
-              <select class="input" id="templateSelect">
-                <option value="">-- Choose a template --</option>
-              </select>
+            <div style="margin-bottom: 18px; display:flex; gap:10px; align-items:flex-end;">
+              <div style="flex:1">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;" for="templateSelect">Select Template</label>
+                <select class="input" id="templateSelect">
+                  <option value="">-- Choose a template --</option>
+                </select>
+              </div>
+              <div style="width:160px; text-align:right;">
+                <button class="btn" type="button" onclick="openAddTemplateModal()">➕ Add Template</button>
+              </div>
             </div>
 
             <!-- Extra Fields for Deposit Request -->
@@ -1193,9 +1247,10 @@
               <textarea class="input" id="messageBox" rows="14" readonly></textarea>
             </div>
 
-            <div style="display: flex; gap: 12px;">
+            <div style="display: flex; gap: 12px; align-items:center;">
               <button class="btn" onclick="copyMessage()">📋 Copy to Clipboard</button>
-              <button class="btn primary" onclick="openEmail()">✉️ Open in Email App</button>
+              <!-- Open in Email App uses mailto:. If no client email is provided we still allow opening a new mail window without recipient -->
+              <button class="btn primary" id="openEmailBtn" onclick="openEmail()">✉️ Open in Email App</button>
             </div>
           </section>
         </div>
@@ -1204,7 +1259,8 @@
       view.appendChild(container);
 
       // Templates data
-      const templates = {
+  // Built-in templates
+  const templates = {
         "Quote Sent": {
           subject: "Your Elite Wrapz Quote",
           body: "Hi {name},\\n\\nThank you for considering Elite Wrapz!\\n\\nYour total quote is {quoteTotal}, with a deposit of {depositTotal} required to secure your booking.\\n\\nPlease note:\\n- Quotes are valid for 30 days.\\n- To accept this quote, simply reply to this message.\\n- We offer a Price Match Guarantee with proof of an official business quote (letterhead or email with full breakdown).\\n- Discounts must be mentioned before your deposit is paid.\\n- Deposits are non-refundable unless otherwise stated in our terms.\\n\\nFull terms & conditions: https://elitewrapz.uk/termsandconditions\\n\\nBest regards,\\nThe Elite Wrapz Team"
@@ -1239,6 +1295,15 @@
         }
       };
 
+  // Load user templates from localStorage (persisted under ew_email_templates)
+  const userTemplatesKey = 'ew_email_templates';
+  const storedTemplates = Store.get(userTemplatesKey, {});
+  // Remove test templates named '0','1','2' if present
+  ['0','1','2'].forEach(tk => { if(storedTemplates && storedTemplates[tk]) delete storedTemplates[tk]; });
+  try{ Store.set(userTemplatesKey, storedTemplates); }catch(e){}
+  // merge stored templates into templates object (user templates can override built-ins)
+  Object.keys(storedTemplates||{}).forEach(k=> templates[k]=storedTemplates[k]);
+
       const select = document.getElementById("templateSelect");
       const messageBox = document.getElementById("messageBox");
       const subjectPreview = document.getElementById("subjectPreview");
@@ -1264,6 +1329,12 @@
             select.appendChild(option);
           }
         });
+        // also add any user templates that aren't in the ordered list (skip numeric test names)
+        Object.keys(templates).forEach(name=>{
+          if(order.indexOf(name)===-1 && !/^\d+$/.test(name)){
+            const option = document.createElement('option'); option.value=name; option.textContent=name; select.appendChild(option);
+          }
+        });
       }
 
       refreshTemplateList();
@@ -1273,7 +1344,8 @@
         const name = document.getElementById("clientName").value || "Customer";
         const selected = select.value;
         if (selected && templates[selected]) {
-          let msg = templates[selected].body.replace(/\\\\n/g, '\\n').replace("{name}", name);
+          // Convert stored literal "\\n" sequences into real newlines for the preview
+          let msg = templates[selected].body.replace(/\\n/g, '\n').replace(/\{name\}/g, name);
           let subject = templates[selected].subject;
 
           if (selected === "Deposit Request") {
@@ -1314,6 +1386,11 @@
           messageBox.value = msg;
           messageBox.dataset.subject = subject;
           if (subjectPreview) subjectPreview.value = subject;
+          // enable/disable the Open in Email button depending on whether a message exists
+          try{
+            const openBtn = document.getElementById('openEmailBtn');
+            if(openBtn) openBtn.disabled = !msg || !msg.trim();
+          }catch(e){}
         } else {
           messageBox.value = "";
           if (subjectPreview) subjectPreview.value = "";
@@ -1334,6 +1411,32 @@
         input.addEventListener("input", updateMessage);
       });
 
+      // Add Template modal
+      window.openAddTemplateModal = function(){
+        const titleIn = el('input',{class:'input',placeholder:'Template name'});
+        const subjectIn = el('input',{class:'input',placeholder:'Subject'});
+        const bodyIn = el('textarea',{class:'input',rows:10,placeholder:'Body (use \\n for newlines)'});
+        const bodyWrap = el('div',{},[ el('label',{class:'muted',html:'Name'}), titleIn, el('label',{class:'muted',html:'Subject'}), subjectIn, el('label',{class:'muted',html:'Body'}), bodyIn ]);
+        const modal = openModal('Add Template', bodyWrap, ()=>{
+          const name = titleIn.value && titleIn.value.trim();
+          if(!name) return showToast('Please enter a template name');
+          const sub = subjectIn.value || '';
+          const body = bodyIn.value || '';
+          // persist
+          try{
+            const stored = Store.get(userTemplatesKey, {});
+            stored[name] = { subject: sub, body: body };
+            Store.set(userTemplatesKey, stored);
+            templates[name] = { subject: sub, body: body };
+            refreshTemplateList();
+            showToast('Template saved');
+            return true;
+          }catch(e){ console.error(e); showToast('Save failed'); return false; }
+        }, 'Save');
+        // prefill if selection exists
+        const sel = select.value; if(sel && templates[sel]){ titleIn.value = sel; subjectIn.value = templates[sel].subject||''; bodyIn.value = templates[sel].body||''; }
+      };
+
       // Copy functions - making them global
       window.copyMessage = function() {
         if (!messageBox.value) return showToast('No message to copy!');
@@ -1351,15 +1454,21 @@
       };
 
       window.openEmail = function() {
-        const email = document.getElementById("clientEmail").value;
+        const email = (document.getElementById("clientEmail") && document.getElementById("clientEmail").value) || '';
         const selected = select.value;
         if (!selected || !templates[selected]) return showToast('Please select a template first.');
-        const subject = messageBox.dataset.subject || templates[selected].subject;
-        const body = encodeURIComponent(messageBox.value);
-        if (email && body) {
-          window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${body}`;
-        } else {
-          showToast('Please enter the client email and select a template.');
+        const subject = messageBox.dataset.subject || templates[selected].subject || '';
+        const bodyVal = messageBox.value || '';
+        if (!bodyVal.trim()) return showToast('No message to open.');
+        const body = encodeURIComponent(bodyVal);
+        // Build mailto; allow empty recipient so the user's mail client still opens
+        const recipient = email ? encodeURIComponent(email) : '';
+        const mailto = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${body}`;
+        // Use window.location to invoke the mail client; open in new tab as fallback
+        try{
+          window.location.href = mailto;
+        }catch(e){
+          try{ window.open(mailto, '_blank'); }catch(e2){ showToast('Unable to open mail client.'); }
         }
       };
     }
@@ -1710,15 +1819,23 @@
         el('div',{style:'height:12px'}),
         el('div',{class:'stats'},[
           stat('b-blue','user','Total Contacts', db.contacts.length),
-          stat('b-green','wrench','Active Projects', active),
-          stat('b-purple','folder','Total Projects', db.projects.length),
-          stat('b-yellow','credit','Project Value', currency(totalVal))
+          stat('b-green','doc','Total Logs', (db.logs||[]).length),
+          stat('b-purple','clock','Last Backup', Store.get('ew_cloud_updatedAt') ? new Date(Store.get('ew_cloud_updatedAt')).toLocaleString() : '\u2014'),
+          stat('b-yellow','star','Total Attachments', ((db.logs||[]).reduce((a,b)=> a + ((b.attachments||[]).length||0), 0)))
         ]),
         el('div',{style:'height:12px'}),
         card('Quick Links', renderQuickLinksSection()),
         el('div',{style:'height:12px'}),
         card('Recent Contacts', renderRecentContacts()),
-        card('Recent Projects', renderRecentProjects()),
+        card('Recent Logs', (function(){
+          const wrap = el('div',{});
+          const items = (db.logs||[]).slice(0,3);
+          if(!items.length) return el('div',{class:'card pad'},[el('div',{class:'empty',html:'No logs yet'})]);
+          const list = el('div',{});
+          items.forEach(l=> list.append(el('div',{class:'card pad',style:'margin-bottom:8px',onclick:()=>{ viewLogModal(l); }},[el('div',{html:`<strong>${l.title}</strong> • <span class="muted">${l.contactName||l.contactId||'Unlinked'}</span>`})])));
+          wrap.append(list);
+          return wrap;
+        })()),
       ]);
       $('#view').append(wrap);
     }
@@ -2495,6 +2612,7 @@
       const quick = el('div',{class:'row',style:'justify-content:flex-end'},[
         contact.phone ? el('button',{class:'btn sm',onclick:()=>copyText(contact.phone)},[el('span',{html:renderIcon('copy')}),document.createTextNode('Copy Phone')]) : null,
         contact.email ? el('button',{class:'btn sm',onclick:()=>copyText(contact.email)},[el('span',{html:renderIcon('copy')}),document.createTextNode('Copy Email')]) : null,
+        el('button',{class:'btn sm primary',onclick:()=> openAddLogModal(contact)},[document.createTextNode('Add Log')])
       ].filter(Boolean));
 
       const leftCol = el('div',{},[
@@ -2598,6 +2716,121 @@
 
   // render project tag options
   (function renderProjectTagOptions(){ const wrap = document.getElementById('projectTagWrap'); if(!wrap) return; wrap.innerHTML=''; const settings = loadSettings(); (settings.tags||[]).forEach(t=>{ const btn = el('button',{class:'chip tag-toggle',dataset:{tag:t.name},onclick:(e)=>{ e.preventDefault(); e.currentTarget.classList.toggle('selected'); }},[document.createTextNode(t.name)]); if(project && (project.tags||[]).includes(t.name)) btn.classList.add('selected'); wrap.append(btn); }); })();
+    }
+
+    /* ===== Logs feature ===== */
+    function renderLogs(){
+      const view = document.getElementById('view'); view.innerHTML = '';
+      const wrap = el('div',{});
+      wrap.append(el('div',{class:'card pad'},[
+        el('div',{class:'section-title',html:'Logs'}),
+        el('div',{style:'height:8px'}),
+        el('div',{class:'search'},[ el('input',{class:'input',placeholder:'Search logs by title, contact or notes...', id:'logSearch'}) ])
+      ]));
+
+      const feedWrap = el('div',{});
+      wrap.append(el('div',{style:'height:12px'}), feedWrap);
+      view.appendChild(wrap);
+
+      const searchEl = document.getElementById('logSearch');
+      function renderList(items){
+        feedWrap.innerHTML = '';
+        if(!items || !items.length) { feedWrap.append(el('div',{class:'empty',html:'No logs yet.'})); return; }
+        items.forEach(log=>{
+          const preview = (log.notes||'').split('\n')[0] || '';
+          const item = el('div',{class:'card pad',style:'margin-bottom:8px;cursor:pointer',onclick:()=> viewLogModal(log)},[
+            el('div',{html:`<strong>${log.title}</strong> • <span class="muted">${log.contactName || log.contactId || 'Unlinked'}</span>`}),
+            el('div',{style:'height:6px'}),
+            el('div',{class:'muted',html:preview})
+          ]);
+          feedWrap.append(item);
+        });
+      }
+
+      function refresh(){
+        const q = (searchEl.value||'').toLowerCase();
+        const items = (db.logs||[]).filter(l=>{
+          return (l.title||'').toLowerCase().includes(q) || (l.contactName||'').toLowerCase().includes(q) || (l.notes||'').toLowerCase().includes(q);
+        });
+        renderList(items);
+      }
+      searchEl.addEventListener('input', refresh);
+      refresh();
+    }
+
+    function openAddLogModal(contact){
+      const titleIn = el('input',{class:'input',placeholder:'Title'});
+      const notesIn = el('textarea',{class:'input',rows:6,placeholder:'Notes / description'});
+      const locationIn = el('input',{class:'input',placeholder:'Location (optional)'});
+      const attachWrap = el('div',{},[]);
+      const fileIn = el('input',{type:'file',multiple:true});
+      fileIn.addEventListener('change', ()=>{
+        attachWrap.innerHTML='';
+        Array.from(fileIn.files||[]).forEach(f=> attachWrap.append(el('div',{},[ document.createTextNode(f.name) ])));
+      });
+
+      const body = el('div',{},[
+        formField('Title *', titleIn),
+        formField('Notes', notesIn),
+        formField('Location', locationIn),
+        formField('Attachments', el('div',{},[ fileIn, el('div',{style:'height:8px'}), attachWrap ]), 'Optional — multiple files allowed')
+      ]);
+
+      openModal('Add Log', body, async ()=>{
+        if(!titleIn.value.trim()){ alert('Title is required'); return false; }
+        const files = Array.from(fileIn.files || []);
+        const uploaded = [];
+        try{
+          for(const f of files){
+            // use exposed helper if available
+            if(window.EL_FIREBASE && typeof window.EL_FIREBASE.uploadAttachment === 'function'){
+              const res = await window.EL_FIREBASE.uploadAttachment(f, 'logs');
+              if(res) uploaded.push(res);
+            }
+          }
+        }catch(e){ console.error('Upload failed', e); showToast('Upload failed'); }
+
+        const payload = {
+          contactId: contact && contact.id || null,
+          contactName: contact && contact.name || null,
+          title: titleIn.value.trim(),
+          notes: notesIn.value.trim(),
+          location: locationIn.value.trim() || null,
+          attachments: uploaded,
+          createdAt: (new Date()).toISOString()
+        };
+        try{
+          if(window.EL_FIREBASE && typeof window.EL_FIREBASE.createLogEntry === 'function'){
+            await window.EL_FIREBASE.createLogEntry(payload);
+          }
+        }catch(e){ console.error('Create log failed', e); }
+        // also update local state so UI updates instantly
+        db.logs = db.logs || [];
+        db.logs.unshift(Object.assign({ id: crypto.randomUUID() }, payload));
+        Store.set('ew_logs', db.logs);
+        persist();
+        // refresh Logs view if visible
+        if(location.hash.replace('#/','') === 'logs') renderLogs();
+        // update dashboard widgets immediately
+        try{ renderDashboard(); }catch(e){}
+        showToast('Log saved');
+        return true;
+      }, 'Save');
+    }
+
+    function viewLogModal(log){
+      const body = el('div',{},[
+        el('div',{html:`<strong>${log.title}</strong>`}),
+        el('div',{style:'height:6px'}),
+        el('div',{html:`Contact: ${log.contactName || log.contactId || '<span class="muted">Contact Deleted</span>'}`}),
+        el('div',{style:'height:8px'}),
+        el('div',{html: (log.notes||'').replace(/\n/g,'<br>') }),
+        el('div',{style:'height:8px'}),
+        el('div',{html: log.location ? ('Location: '+log.location) : ''}),
+        el('div',{style:'height:8px'}),
+        el('div',{}, (log.attachments||[]).map(a=> el('div',{},[ el('a',{href:a.url, target:'_blank', html:a.name}) ])))
+      ]);
+      openModal('Log — '+(log.title||''), body, ()=> true, 'Close');
     }
 
     function openEventModal(event){
