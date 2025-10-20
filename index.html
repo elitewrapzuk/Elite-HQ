@@ -2844,7 +2844,10 @@
       const view = document.getElementById('view'); view.innerHTML = '';
       const wrap = el('div',{});
       wrap.append(el('div',{class:'card pad'},[
-        el('div',{class:'section-title',html:'Logs'}),
+        el('div',{style:'display:flex;justify-content:space-between;align-items:center'},[
+          el('div',{class:'section-title',html:'Logs'}),
+          el('div',{},[ el('button',{class:'btn primary',onclick:()=> openAddLogModalWithCustomer()},[ document.createTextNode('+ Add Log') ]) ])
+        ]),
         el('div',{style:'height:8px'}),
         el('div',{class:'search'},[ el('input',{class:'input',placeholder:'Search logs by title, contact or notes...', id:'logSearch'}) ])
       ]));
@@ -2960,6 +2963,19 @@
       }
       searchEl.addEventListener('input', refresh);
       refresh();
+    }
+
+    // helper to open Add Log with optional free-form customer name input
+    function openAddLogModalWithCustomer(){
+      // ask for optional customer name first
+      const nameIn = el('input',{class:'input',placeholder:'Customer name (optional)'});
+      const body = el('div',{},[ formField('Customer name', nameIn) ]);
+      openModal('Add Log — Customer (optional)', body, async ()=>{
+        const customerName = nameIn.value.trim() || null;
+        const contact = customerName ? { id: 'local_contact_' + Date.now(), name: customerName } : null;
+        openAddLogModal(contact);
+        return true;
+      }, 'Continue');
     }
 
     function openAddLogModal(contact){
