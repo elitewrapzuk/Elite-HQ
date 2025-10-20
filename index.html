@@ -45,6 +45,25 @@
     body{transition:background .3s ease,color .3s ease}
     .app{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
 
+    /* Mobile / overflow safety fixes */
+    html, body { overflow-x: hidden; }
+    .container, .card, .pad { max-width: 100%; }
+    img, svg { max-width: 100%; height: auto; }
+    textarea.input, input.input, select.input { max-width: 100%; box-sizing: border-box; }
+    @media (max-width: 900px){
+      .app{grid-template-columns: 1fr;}
+      .sidebar{position:fixed;left:-100%;transition:left .25s ease}
+      .sidebar.open{left:0}
+      .nav a{font-size:14px}
+      .topbar .page-title{display:none}
+      .email-templates-grid{grid-template-columns: 1fr !important}
+      .modal { margin: 12px; width: calc(100% - 24px); }
+      .card.pad { padding: 12px; }
+    }
+    /* Responsive two-column helper used by some views (Referrals etc) */
+    .two-col { display: grid; grid-template-columns: 1fr 320px; gap:12px; }
+    @media (max-width:900px){ .two-col { grid-template-columns: 1fr !important; } .two-col > div { width:100% } }
+
     /* SIDEBAR (Glass) */
     .sidebar{backdrop-filter: blur(14px);background:var(--surface);border-right:1px solid var(--line);padding:16px 12px;position:sticky;top:0;height:100vh;transition:background .3s ease,border-color .3s ease;box-shadow:var(--glass-ring)}
     .logo{display:flex;align-items:center;gap:10px;padding:8px 8px 14px 8px}
@@ -842,7 +861,7 @@
       }
 
   // expose helper functions globally so Settings UI can call them — merge onto existing object to preserve debug fields
-  window.EL_FIREBASE = Object.assign(window.EL_FIREBASE || {}, { initFirebase, backupNow, restoreNow, showCloudStatus, migrateFrom, findLatestBackupAndMaybeImport, uploadAttachment, createLogEntry, listenToLogsCollection });
+  window.EL_FIREBASE = Object.assign(window.EL_FIREBASE || {}, { initFirebase, backupNow, restoreNow, showCloudStatus, migrateFrom, findLatestBackupAndMaybeImport, uploadAttachment, createLogEntry, listenToLogsCollection, updateLogEntry });
 
       // init on load (give the page a second to finish wiring)
       setTimeout(()=>{ try{ initFirebase(); }catch(e){ console.error(e); } }, 800);
@@ -1013,7 +1032,7 @@
       const view = document.getElementById('view'); view.innerHTML = '';
       const container = el('div',{class:'card pad'},[
         el('h2',{html:'Referrals'}),
-        el('div',{style:'display:grid;grid-template-columns:1fr 320px;gap:12px'},[
+        el('div',{class:'two-col'},[
           el('div',{},[
             el('div',{class:'card pad'},[
               el('div',{class:'section-title',html:'Create referral code'}),
@@ -1047,8 +1066,12 @@
         if(!items.length) { wrap.append(el('div',{class:'empty',html:'No referrals yet'})); return; }
         items.slice().reverse().forEach(r=>{
           const used = r.used ? `<span class="chip" style="background:var(--nav-hover)">Used</span>` : `<span class="chip" style="background:rgba(1,250,191,.12)">Available</span>`;
-          const row = el('div',{class:'card pad',style:'margin-bottom:8px'},[
+          const header = el('div',{style:'display:flex;justify-content:space-between;align-items:center'},[
             el('div',{html:`<strong>${r.clientName}</strong> • ${r.jobRef} • ${r.quoteTotal ? '£'+r.quoteTotal : ''}`}),
+            el('div',{class:'muted',html: formatDate(r.createdAt) })
+          ]);
+          const row = el('div',{class:'card pad',style:'margin-bottom:8px'},[
+            header,
             el('div',{style:'height:6px'}),
             el('div',{html:`Code: <strong>${r.code}</strong> • ${used}`})
           ]);
@@ -2456,7 +2479,7 @@
     }, {capture:false});
 
     /************ Modals ************/
-    function openModal(title, bodyNode, onSubmit, submitText='Save', opts={}){
+      function openModal(title, bodyNode, onSubmit, submitText='Save', opts={}){
       const bd = $('#modalBackdrop'); bd.innerHTML='';
       const modal = el('div',{class:'modal'+(opts.className?(' '+opts.className):''), role:'dialog','aria-modal':'true'},[]);
       function closeModal(){ bd.style.display='none'; }
@@ -2468,7 +2491,17 @@
         el('div',{class:'body'},[bodyNode]),
         el('div',{class:'footer'},[
           el('button',{class:'btn',onclick:closeModal},[document.createTextNode('Cancel')]),
-          el('button',{class:'btn primary',onclick:()=>{ if(onSubmit()) closeModal(); }},[document.createTextNode(submitText)])
+          el('button',{class:'btn primary',onclick:async ()=>{
+            try{
+              const res = onSubmit && onSubmit();
+              if(res && typeof res.then === 'function'){
+                const ok = await res;
+                if(ok) closeModal();
+              } else {
+                if(res) closeModal();
+              }
+            }catch(e){ console.error('Modal submit failed', e); }
+          }},[document.createTextNode(submitText)])
         ])
       );
       bd.append(modal); bd.style.display='flex';
@@ -2736,14 +2769,43 @@
       function renderList(items){
         feedWrap.innerHTML = '';
         if(!items || !items.length) { feedWrap.append(el('div',{class:'empty',html:'No logs yet.'})); return; }
-        items.forEach(log=>{
-          const preview = (log.notes||'').split('\n')[0] || '';
-          const item = el('div',{class:'card pad',style:'margin-bottom:8px;cursor:pointer',onclick:()=> viewLogModal(log)},[
-            el('div',{html:`<strong>${log.title}</strong> • <span class="muted">${log.contactName || log.contactId || 'Unlinked'}</span>`}),
-            el('div',{style:'height:6px'}),
-            el('div',{class:'muted',html:preview})
-          ]);
-          feedWrap.append(item);
+        // Helper to convert createdAt to JS Date (handles Firestore Timestamp)
+        function toDate(v){ if(!v) return new Date(0); if(v && typeof v.toDate === 'function') return v.toDate(); return new Date(v); }
+        // Sort items newest-first by createdAt
+        const sorted = (items||[]).slice().sort((a,b)=> toDate(b.createdAt).getTime() - toDate(a.createdAt).getTime());
+        // Group by month-year key
+        const groups = {};
+        sorted.forEach(log=>{
+          const d = toDate(log.createdAt);
+          const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+          if(!groups[key]) groups[key] = { date: d, items: [] };
+          groups[key].items.push(log);
+        });
+        // Month color palette (cycled)
+        const colors = ['#01FABF','#00B5FF','#FFB400','#FF6B6B','#8A5FFF','#00C2A8','#FFC1E3'];
+        // Order groups newest-first
+        const groupKeys = Object.keys(groups).sort((a,b)=> groups[b].date - groups[a].date);
+        groupKeys.forEach((gk, idx)=>{
+          const grp = groups[gk];
+          const monthLabel = grp.date.toLocaleString(undefined,{month:'long', year:'numeric'});
+          const color = colors[idx % colors.length];
+          // month divider
+          const divider = el('div',{class:'month-divider',style:`background:${color};color:#fff;padding:8px;border-radius:8px;margin:12px 0;`},[ el('strong',{html:monthLabel}) ]);
+          feedWrap.append(divider);
+          // items for this month
+          grp.items.forEach(log=>{
+            const preview = (log.notes||'').split('\n')[0] || '';
+            const header = el('div',{style:'display:flex;justify-content:space-between;align-items:center'},[
+              el('div',{html:`<strong>${log.title}</strong> • <span class="muted">${log.contactName || log.contactId || 'Unlinked'}</span>`}),
+              el('div',{},[ el('button',{class:'btn sm',onclick:(e)=>{ e.stopPropagation(); openEditLogModal(log); }},[document.createTextNode('Edit')]) ])
+            ]);
+            const item = el('div',{class:'card pad',style:'margin-bottom:8px;cursor:pointer',onclick:()=> viewLogModal(log)},[
+              header,
+              el('div',{style:'height:6px'}),
+              el('div',{class:'muted',html:preview})
+            ]);
+            feedWrap.append(item);
+          });
         });
       }
 
@@ -2819,8 +2881,13 @@
     }
 
     function viewLogModal(log){
-      const body = el('div',{},[
+      const ts = log.createdAt ? (formatDate(log.createdAt)) : '';
+      const header = el('div',{style:'display:flex;justify-content:space-between;align-items:center'},[
         el('div',{html:`<strong>${log.title}</strong>`}),
+        el('div',{class:'muted',html:ts})
+      ]);
+      const body = el('div',{},[
+        header,
         el('div',{style:'height:6px'}),
         el('div',{html:`Contact: ${log.contactName || log.contactId || '<span class="muted">Contact Deleted</span>'}`}),
         el('div',{style:'height:8px'}),
@@ -2831,6 +2898,85 @@
         el('div',{}, (log.attachments||[]).map(a=> el('div',{},[ el('a',{href:a.url, target:'_blank', html:a.name}) ])))
       ]);
       openModal('Log — '+(log.title||''), body, ()=> true, 'Close');
+    }
+
+    function formatDate(v){
+      try{
+        let d;
+        // Firestore Timestamp has toDate()
+        if(v && typeof v.toDate === 'function') d = v.toDate();
+        else d = new Date(v);
+        if(isNaN(d.getTime())) return '';
+        return d.toLocaleString();
+      }catch(e){ return ''; }
+    }
+
+    // Update an existing log (Firestore + local store)
+    async function updateLogEntry(id, payload){
+      try{
+        if(window.firebase && firebase.firestore){
+          await firebase.firestore().collection('logs').doc(id).set(Object.assign({}, payload, { modifiedAt: firebase.firestore.FieldValue.serverTimestamp() }), { merge: true });
+        }
+      }catch(e){ console.error('updateLogEntry failed', e); throw e; }
+      // update local store
+      try{
+        db.logs = db.logs || [];
+        const idx = db.logs.findIndex(x=>x.id===id);
+        if(idx>-1){ db.logs[idx] = Object.assign({}, db.logs[idx], payload); Store.set('ew_logs', db.logs); }
+      }catch(e){}
+    }
+
+    // Open Edit modal (prefills and supports attachments)
+    function openEditLogModal(log){
+      const titleIn = el('input',{class:'input',placeholder:'Title',value:log.title||''});
+      const notesIn = el('textarea',{class:'input',rows:6,placeholder:'Notes / description',html:log.notes||''});
+      const locationIn = el('input',{class:'input',placeholder:'Location (optional)',value:log.location||''});
+      const attachWrap = el('div',{},[]);
+      const fileIn = el('input',{type:'file',multiple:true});
+      fileIn.addEventListener('change', ()=>{
+        attachWrap.innerHTML='';
+        Array.from(fileIn.files||[]).forEach(f=> attachWrap.append(el('div',{},[ document.createTextNode(f.name) ])));
+      });
+      // show existing attachments
+      if(log.attachments && log.attachments.length){
+        log.attachments.forEach(a=> attachWrap.append(el('div',{},[ el('a',{href:a.url,target:'_blank',html:a.name}) ])));
+      }
+
+      const body = el('div',{},[
+        formField('Title *', titleIn),
+        formField('Notes', notesIn),
+        formField('Location', locationIn),
+        formField('Attachments', el('div',{},[ fileIn, el('div',{style:'height:8px'}), attachWrap ]), 'Optional — existing attachments shown below')
+      ]);
+
+      openModal('Edit Log', body, async ()=>{
+        if(!titleIn.value.trim()){ alert('Title is required'); return false; }
+        const files = Array.from(fileIn.files || []);
+        const uploaded = [];
+        try{
+          for(const f of files){ if(window.EL_FIREBASE && typeof window.EL_FIREBASE.uploadAttachment === 'function'){ const res = await window.EL_FIREBASE.uploadAttachment(f, 'logs'); if(res) uploaded.push(res); } }
+        }catch(e){ console.error('Upload failed', e); showToast('Upload failed'); }
+
+        const payload = {
+          title: titleIn.value.trim(),
+          notes: notesIn.value.trim(),
+          location: locationIn.value.trim() || null,
+        };
+        // merge existing attachments and newly uploaded
+        payload.attachments = (log.attachments || []).concat(uploaded);
+        try{
+          if(window.EL_FIREBASE && typeof window.EL_FIREBASE.updateLogEntry === 'function'){
+            await window.EL_FIREBASE.updateLogEntry(log.id, payload);
+          } else {
+            await updateLogEntry(log.id, payload);
+          }
+          showToast('Log updated');
+          // refresh UI
+          if(location.hash.replace('#/','') === 'logs') renderLogs();
+          try{ renderDashboard(); }catch(e){}
+          return true;
+        }catch(e){ console.error('Update failed', e); showToast('Update failed'); return false; }
+      }, 'Save');
     }
 
     function openEventModal(event){
