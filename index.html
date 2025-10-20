@@ -3040,7 +3040,7 @@
         el('div',{style:'height:8px'}),
         el('div',{}, (log.attachments||[]).map(a=> el('div',{},[ el('a',{href:a.url, target:'_blank', html:a.name}) ])))
       ]);
-      openModal('Log — '+(log.title||''), body, ()=> true, 'Close');
+  openModal('Log — '+(log.title||''), body, ()=> true, 'Close', { className: 'wide' });
     }
 
     function formatDate(v){
