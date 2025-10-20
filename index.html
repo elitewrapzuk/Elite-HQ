@@ -2846,7 +2846,7 @@
       wrap.append(el('div',{class:'card pad'},[
         el('div',{style:'display:flex;justify-content:space-between;align-items:center'},[
           el('div',{class:'section-title',html:'Logs'}),
-          el('div',{},[ el('button',{class:'btn primary',onclick:()=> openAddLogModalWithCustomer()},[ document.createTextNode('+ Add Log') ]) ])
+          el('div',{},[ el('button',{class:'btn primary',onclick:()=> openAddLogModalFromLogs()},[ document.createTextNode('+ Add Log') ]) ])
         ]),
         el('div',{style:'height:8px'}),
         el('div',{class:'search'},[ el('input',{class:'input',placeholder:'Search logs by title, contact or notes...', id:'logSearch'}) ])
@@ -2976,6 +2976,70 @@
         openAddLogModal(contact);
         return true;
       }, 'Continue');
+    }
+
+    // Full Add Log modal from Logs page (includes optional free-text Customer name)
+    function openAddLogModalFromLogs(){
+      const customerIn = el('input',{class:'input',placeholder:'Customer name (optional)'});
+      const titleIn = el('input',{class:'input',placeholder:'Title'});
+      const notesIn = el('textarea',{class:'input',rows:6,placeholder:'Notes / description'});
+      const locationIn = el('input',{class:'input',placeholder:'Location (optional)'});
+      const attachWrap = el('div',{},[]);
+      const fileIn = el('input',{type:'file',multiple:true});
+      fileIn.addEventListener('change', ()=>{
+        attachWrap.innerHTML='';
+        Array.from(fileIn.files||[]).forEach(f=> attachWrap.append(el('div',{},[ document.createTextNode(f.name) ])));
+      });
+
+      const body = el('div',{},[
+        formField('Customer (optional)', customerIn),
+        formField('Title *', titleIn),
+        formField('Notes', notesIn),
+        formField('Location', locationIn),
+        formField('Attachments', el('div',{},[ fileIn, el('div',{style:'height:8px'}), attachWrap ]), 'Optional — multiple files allowed')
+      ]);
+
+      openModal('Add Log', body, async ()=>{
+        if(!titleIn.value.trim()){ alert('Title is required'); return false; }
+        const files = Array.from(fileIn.files || []);
+        const uploaded = [];
+        try{
+          for(const f of files){
+            if(window.EL_FIREBASE && typeof window.EL_FIREBASE.uploadAttachment === 'function'){
+              const res = await window.EL_FIREBASE.uploadAttachment(f, 'logs');
+              if(res) uploaded.push(res);
+            }
+          }
+        }catch(e){ console.error('Upload failed', e); showToast('Upload failed'); }
+
+        const payload = {
+          contactId: null,
+          contactName: customerIn.value.trim() || null,
+          title: titleIn.value.trim(),
+          notes: notesIn.value.trim(),
+          location: locationIn.value.trim() || null,
+          attachments: uploaded,
+          createdAt: (new Date()).toISOString()
+        };
+        try{
+          if(window.EL_FIREBASE && typeof window.EL_FIREBASE.createLogEntry === 'function'){
+            const docId = await window.EL_FIREBASE.createLogEntry(payload);
+            payload.id = docId || (crypto.randomUUID ? crypto.randomUUID() : 'local_' + Date.now());
+          } else {
+            payload.id = (crypto.randomUUID ? crypto.randomUUID() : 'local_' + Date.now());
+          }
+        }catch(e){ console.error('Create log failed', e); payload.id = (crypto.randomUUID ? crypto.randomUUID() : 'local_' + Date.now()); }
+
+        // update local state so UI updates instantly
+        db.logs = db.logs || [];
+        db.logs.unshift(payload);
+        try{ Store.set('ew_logs', db.logs); }catch(e){}
+        persist();
+        if(location.hash.replace('#/','') === 'logs') renderLogs();
+        try{ renderDashboard(); }catch(e){}
+        showToast('Log saved');
+        return true;
+      }, 'Save');
     }
 
     function openAddLogModal(contact){
