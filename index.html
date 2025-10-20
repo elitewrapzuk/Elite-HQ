@@ -557,9 +557,11 @@
       };
 
       let firebaseReady = false;
-      let fbDocRef = null;
-      let fbUnsubscribe = null; // store snapshot unsubscribe
-      let suppressLocalSync = false;
+  let fbDocRef = null;
+  let fbUnsubscribe = null; // store snapshot unsubscribe
+  let suppressLocalSync = false;
+  // expose firebase ready flag for helpers
+  window.firebaseReady = false;
       // simple debounce helper
       function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t = setTimeout(()=> fn(...a), ms); }; }
 
@@ -603,7 +605,7 @@
 
           // Use onAuthStateChanged to ensure reads only happen after auth is established
           auth.onAuthStateChanged(user => {
-            if(user){
+        if(user){
               const uid = user.uid;
               // If we already have a listener for this uid, we're ready
               // prefer a stored canonical doc id if present
@@ -615,7 +617,10 @@
               try{ if(window.EL_FIREBASE && typeof window.EL_FIREBASE.listenToLogsCollection === 'function'){ window.EL_FIREBASE.listenToLogsCollection(); } }
               catch(e){ /* ignore */ }
               firebaseReady = true;
+              window.firebaseReady = true;
                 showCloudStatus('Connected');
+              // attempt to flush any locally queued attachments
+              try{ flushPendingAttachments(); }catch(e){}
               // If any Store.set happened before Firebase was ready, perform a pending backup now
               try{ if(window._pendingBackup){ window._pendingBackup = false; doBackupNow(); } }catch(e){}
               // After connecting, attempt to auto-import the most recently edited backup across the collection
@@ -824,13 +829,97 @@
 
       // Firebase Storage helper for attachments
       async function uploadAttachment(file, pathPrefix = 'logs'){
-        if(!window.firebase || !firebase.storage) throw new Error('Firebase storage not available');
-        const storage = firebase.storage();
-        const filename = `${pathPrefix}/${Date.now()}_${file.name.replace(/[^a-z0-9.-_]/gi,'_')}`;
-        const ref = storage.ref().child(filename);
-        const snap = await ref.put(file);
-        const url = await snap.ref.getDownloadURL();
-        return { name: file.name, url };
+        // Try direct upload to Firebase Storage if available and connected
+        if(window.firebase && firebase.storage && typeof firebase.storage === 'function' && window.firebaseReady){
+          try{
+            const storage = firebase.storage();
+            const filename = `${pathPrefix}/${Date.now()}_${file.name.replace(/[^a-z0-9.-_]/gi,'_')}`;
+            const ref = storage.ref().child(filename);
+            const snap = await ref.put(file);
+            const url = await snap.ref.getDownloadURL();
+            return { name: file.name, url, remote: true };
+          }catch(e){
+            console.warn('uploadAttachment remote upload failed, falling back to local pending store', e);
+            // fallthrough to pending storage
+          }
+        }
+
+        // Fallback: persist file as a data URL in a local pending queue so the user can save immediately
+        // and we attempt to flush the queue later when Firebase is available.
+        const id = 'pending_' + Date.now() + '_' + (crypto && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = (err) => reject(err);
+          reader.readAsDataURL(file);
+        });
+        try{
+          const pending = Store.get('ew_pending_attachments', {});
+          pending[id] = { id, name: file.name, dataUrl, createdAt: (new Date()).toISOString() };
+          Store.set('ew_pending_attachments', pending);
+        }catch(e){ console.error('Failed to persist pending attachment', e); }
+        return { name: file.name, url: 'local:' + id, pending: true, id };
+      }
+
+      // Convert a dataURL to a Blob
+      function dataURLToBlob(dataurl){
+        const parts = dataurl.split(',');
+        const meta = parts[0];
+        const base64 = parts[1];
+        const matches = /:(.*?);/.exec(meta);
+        const mime = matches && matches[1] ? matches[1] : 'application/octet-stream';
+        const binary = atob(base64);
+        const len = binary.length;
+        const u8 = new Uint8Array(len);
+        for(let i=0;i<len;i++) u8[i] = binary.charCodeAt(i);
+        return new Blob([u8], { type: mime });
+      }
+
+      // Flush pending local attachments to Firebase Storage when possible.
+      async function flushPendingAttachments(){
+        try{
+          if(!window.firebase || !firebase.storage || !window.firebaseReady) return;
+          const pending = Store.get('ew_pending_attachments', {});
+          const keys = Object.keys(pending || {});
+          if(!keys.length) return;
+          for(const id of keys){
+            const p = pending[id];
+            try{
+              const blob = dataURLToBlob(p.dataUrl);
+              const filename = `logs/${Date.now()}_${p.name.replace(/[^a-z0-9.-_]/gi,'_')}`;
+              const ref = firebase.storage().ref().child(filename);
+              const snap = await ref.put(blob);
+              const url = await snap.ref.getDownloadURL();
+              // Update any local logs that referenced this pending id
+              try{
+                db.logs = db.logs || [];
+                let updated = false;
+                db.logs.forEach(log => {
+                  if(!log.attachments) return;
+                  const newAttachments = log.attachments.map(a=> a && a.url === ('local:' + id) ? { name: p.name, url } : a);
+                  if(JSON.stringify(newAttachments) !== JSON.stringify(log.attachments)){
+                    log.attachments = newAttachments;
+                    updated = true;
+                    // push update to Firestore if we have an id
+                    if(log.id){
+                      try{
+                        if(window.EL_FIREBASE && typeof window.EL_FIREBASE.updateLogEntry === 'function'){
+                          window.EL_FIREBASE.updateLogEntry(log.id, { attachments: log.attachments });
+                        } else {
+                          updateLogEntry(log.id, { attachments: log.attachments });
+                        }
+                      }catch(e){ console.error('Failed to update log after flushing attachment', e); }
+                    }
+                  }
+                });
+                if(updated) Store.set('ew_logs', db.logs);
+              }catch(e){ console.error('Failed to apply flushed attachment to local logs', e); }
+              // remove pending entry
+              delete pending[id];
+              Store.set('ew_pending_attachments', pending);
+            }catch(e){ console.error('Failed to upload pending attachment', id, e); }
+          }
+        }catch(e){ console.error('flushPendingAttachments failed', e); }
       }
 
       // Firestore logs collection helpers
@@ -861,7 +950,7 @@
       }
 
   // expose helper functions globally so Settings UI can call them — merge onto existing object to preserve debug fields
-  window.EL_FIREBASE = Object.assign(window.EL_FIREBASE || {}, { initFirebase, backupNow, restoreNow, showCloudStatus, migrateFrom, findLatestBackupAndMaybeImport, uploadAttachment, createLogEntry, listenToLogsCollection, updateLogEntry });
+  window.EL_FIREBASE = Object.assign(window.EL_FIREBASE || {}, { initFirebase, backupNow, restoreNow, showCloudStatus, migrateFrom, findLatestBackupAndMaybeImport, uploadAttachment, createLogEntry, listenToLogsCollection, updateLogEntry, flushPendingAttachments });
 
       // init on load (give the page a second to finish wiring)
       setTimeout(()=>{ try{ initFirebase(); }catch(e){ console.error(e); } }, 800);
