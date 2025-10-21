@@ -242,6 +242,29 @@
     .contact-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
     .btn.sm{height:28px;padding:0 10px;font-size:12px;border-radius:8px}
 
+    /* Contacts view custom styles (matching screenshot) */
+    .contacts-top{display:flex;flex-direction:column;gap:12px}
+    .contacts-search-row{display:flex;gap:12px;align-items:center}
+    .contacts-search{flex:1;display:flex;align-items:center;background:linear-gradient(180deg, rgba(255,255,255,0.7), rgba(255,255,255,0.6));border-radius:12px;padding:10px 12px;border:1px solid var(--line);box-shadow:var(--shadow-sm)}
+    .contacts-search input{border:0;outline:none;background:transparent;font-size:16px;width:100%}
+    .contacts-add{width:48px;height:48px;border-radius:12px;background:var(--brand);color:#fff;border:0;display:grid;place-items:center;font-size:26px;box-shadow:0 6px 18px rgba(1,250,191,0.18)}
+    .contacts-tabs{display:flex;gap:18px;padding:0 2px}
+    .contacts-tab{padding:8px 6px;border:0;background:transparent;color:var(--muted);font-weight:700;position:relative}
+    .contacts-tab.active{color:var(--brand)}
+    .contacts-tab.active::after{content:'';position:absolute;left:0;right:0;height:3px;background:var(--brand);bottom:-6px;border-radius:6px}
+    .filter-chips{display:flex;gap:10px;overflow:auto;padding:6px 0}
+    .filter-chip{padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--muted);font-weight:700;white-space:nowrap}
+    .filter-chip.active{background:var(--brand);color:#fff;border-color:transparent}
+
+    .contact-card-elevated{display:flex;gap:14px;align-items:flex-start;background:rgba(255,255,255,0.95);border-radius:16px;padding:14px;box-shadow:0 8px 24px rgba(16,24,40,0.06);border:1px solid var(--line);}
+    .cc-avatar{width:56px;height:56px;border-radius:50%;overflow:hidden;flex:0 0 56px}
+    .cc-avatar img{width:100%;height:100%;object-fit:cover}
+    .cc-body{flex:1}
+    .cc-name{font-weight:800;font-size:16px;color:#0F1724}
+    .cc-company{color:#7B8794;font-size:13px;margin-top:4px}
+    .tag-pill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;font-size:12px;border:1px solid rgba(0,0,0,0.04);margin-right:8px}
+    .tag-pill .dot{width:10px;height:10px;border-radius:4px;display:inline-block}
+
     /* MODALS (scrollable, wide landscape option) */
     .modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,.45);display:none;align-items:center;justify-content:center;z-index:50;animation:fade .2s ease}
     [data-theme="dark"] .modal-backdrop{background:rgba(0,0,0,.55)}
@@ -1017,6 +1040,18 @@
       clearTimeout(showToast._t);
       showToast._t = setTimeout(()=>t.classList.remove('show'), 1200);
     }
+
+    // show a toast with an Undo action; undoFn will be called if user clicks Undo
+    function showUndoToast(msg='Done', undoFn, timeout=6000){
+      const wrap = document.getElementById('toastWrap'); if(!wrap) return;
+      const t = el('div',{class:'toast show'},[ document.createTextNode(msg), el('button',{class:'chip',style:'margin-left:auto'},[document.createTextNode('Undo')]) ]);
+      const btn = t.querySelector('button');
+      let removed = false;
+      function remove(){ if(removed) return; removed = true; t.classList.remove('show'); setTimeout(()=>{ try{ t.remove(); }catch(e){} }, 220); }
+      const timer = setTimeout(()=>{ remove(); }, timeout);
+      btn.addEventListener('click', ()=>{ clearTimeout(timer); try{ undoFn && undoFn(); }catch(e){} remove(); });
+      wrap.append(t);
+    }
     async function copyText(txt){
       try{ await navigator.clipboard.writeText(txt||''); showToast('Copied'); }
       catch(e){ showToast('Copy failed'); }
@@ -1587,7 +1622,23 @@
 
     /* Settings view */
     const SETTINGS_KEY = 'ew_settings';
-    function loadSettings(){ return Store.get(SETTINGS_KEY, { tags: [], logoDataUrl: null, other: {} }); }
+    function loadSettings(){
+      const raw = Store.get(SETTINGS_KEY, { tags: [], logoDataUrl: null, other: {} });
+      let changed = false;
+      // normalize tags to objects {name,color,icon}
+      raw.tags = (raw.tags || []).map(t => {
+        if(!t) return { name: String(t), color: '#01FABF', icon: '' };
+        if(typeof t === 'string'){ changed = true; return { name: t, color: '#01FABF', icon: '' }; }
+        // ensure properties
+        const out = { name: t.name || String(t), color: t.color || '#01FABF', icon: t.icon || '' };
+        if(out.name !== (t.name||t)) changed = changed || false;
+        return out;
+      });
+      // normalize groups to objects {name}
+      raw.groups = (raw.groups || []).map(g => (typeof g === 'string' ? { name: g } : (g && g.name ? g : { name: String(g) } )));
+      if(changed) saveSettings(raw);
+      return raw;
+    }
     function saveSettings(s){ Store.set(SETTINGS_KEY, s); }
 
     /* Data export/import helpers */
@@ -1636,6 +1687,14 @@
     function renderSettings(){
       const view = document.getElementById('view'); view.innerHTML = '';
       const cfg = loadSettings();
+      // ensure sensible default tags exist (only if user hasn't created tags yet)
+      if(!cfg.tags || !cfg.tags.length){
+        cfg.tags = [
+          { name: 'Client', color: '#01FABF', icon: '👤' },
+          { name: 'Supplier', color: '#FF8A65', icon: '🏭' }
+        ];
+        saveSettings(cfg);
+      }
       // normalize tags to objects {name,color} for newer UX
       cfg.tags = (cfg.tags||[]).map(t => (typeof t === 'string') ? { name: t, color: '#01FABF' } : (t.name? t : { name: String(t), color: '#01FABF' }));
       const wrap = el('div',{},[
@@ -1664,7 +1723,7 @@
         el('div',{class:'card pad'},[
           el('div',{class:'section-title',html:'Tags & Metadata'}),
           el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px'},[
-              el('input',{id:'newTag',class:'input',placeholder:'Add tag and press Enter'}), el('input',{type:'color',id:'newTagColor',value:'#01FABF',style:'width:44px;height:36px;padding:4px;border-radius:8px;border:1px solid var(--line)'}), el('button',{class:'chip',onclick:addTag},[document.createTextNode('Add')]), el('button',{class:'chip',onclick:openTagManager,style:'margin-left:8px'},[document.createTextNode('Manage tags')])
+              el('input',{id:'newTag',class:'input',placeholder:'Add tag and press Enter'}), el('input',{id:'newTagIcon',placeholder:'Emoji (optional)',style:'width:64px'}), el('input',{type:'color',id:'newTagColor',value:'#01FABF',style:'width:44px;height:36px;padding:4px;border-radius:8px;border:1px solid var(--line)'}), el('button',{class:'chip',onclick:addTag},[document.createTextNode('Add')]), el('button',{class:'chip',onclick:openTagManager,style:'margin-left:8px'},[document.createTextNode('Manage tags')])
             ]),
             el('div',{id:'tagsWrap',style:'display:flex;gap:8px;flex-wrap:wrap'}),
           el('div',{style:'height:8px'}),
@@ -1832,40 +1891,104 @@
       });
 
   // tags (now objects with name + color)
-  function renderTags(){ const wrap = document.getElementById('tagsWrap'); wrap.innerHTML=''; (cfg.tags||[]).forEach((t,i)=>{ const pill = el('div',{class:'chip',style:`display:inline-flex;align-items:center;gap:8px;background:${t.color}22;border-color:${t.color}`},[ el('span',{style:`width:12px;height:12px;border-radius:4px;background:${t.color};display:inline-block;margin-right:6px`}), document.createTextNode(t.name), el('button',{class:'chip',onclick:()=>{ cfg.tags.splice(i,1); saveSettings(cfg); renderTags(); }},[document.createTextNode('x')]) ]); wrap.append(pill); }); }
-  function addTag(){ const v = (document.getElementById('newTag').value||'').trim(); const color = (document.getElementById('newTagColor')||{}).value||'#01FABF'; if(!v) return; if(!(cfg.tags||[]).some(x=>x.name.toLowerCase()===v.toLowerCase())){ (cfg.tags = cfg.tags||[]).push({name:v, color}); saveSettings(cfg); renderTags(); document.getElementById('newTag').value=''; } }
+  function renderTags(){ const wrap = document.getElementById('tagsWrap'); wrap.innerHTML=''; (cfg.tags||[]).forEach((t,i)=>{ const pill = el('div',{class:'chip',style:`display:inline-flex;align-items:center;gap:8px;background:${(t.color||'#01FABF')}22;border-color:${t.color||'#01FABF'}`},[ el('span',{style:`width:12px;height:12px;border-radius:4px;background:${t.color||'#01FABF'};display:inline-block;margin-right:6px`}), document.createTextNode((t.icon? t.icon+' ':'')+t.name), el('button',{class:'chip',onclick:()=>{ cfg.tags.splice(i,1); saveSettings(cfg); renderTags(); }},[document.createTextNode('x')]) ]); wrap.append(pill); }); }
+  function addTag(){ const v = (document.getElementById('newTag').value||'').trim(); const color = (document.getElementById('newTagColor')||{}).value||'#01FABF'; const icon = (document.getElementById('newTagIcon')||{}).value||''; if(!v) return; if(!(cfg.tags||[]).some(x=>x.name.toLowerCase()===v.toLowerCase())){ (cfg.tags = cfg.tags||[]).push({name:v, color, icon}); saveSettings(cfg); renderTags(); document.getElementById('newTag').value=''; } }
   document.getElementById('newTag').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); addTag(); } });
   renderTags();
 
-      // Tag Manager modal — bulk operations
+      // Tag Manager modal — bulk operations (polished header + preview)
       function openTagManager(){
         const modalBody = el('div',{},[]);
+
+        // header: add new tag controls + live preview
+        const header = el('div',{style:'display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap'},[]);
+        const inputName = el('input',{placeholder:'Tag name',class:'input',style:'min-width:140px'});
+        const inputIcon = el('input',{placeholder:'Emoji or icon',style:'width:96px'});
+        const inputColor = el('input',{type:'color',value:'#01FABF',style:'width:56px;height:36px;padding:4px;border-radius:8px;border:1px solid var(--line)'});
+        const preview = el('div',{style:'display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:14px;border:1px solid var(--line);background:transparent;min-width:88px;justify-content:center'},[]);
+        const addBtn = el('button',{class:'btn primary',onclick:()=>{
+          const name = (inputName.value||'').trim(); const icon = (inputIcon.value||'').trim(); const color = inputColor.value || '#01FABF';
+          if(!name) { showToast('Please enter a tag name'); return; }
+          if(!(cfg.tags||[]).some(x=>x.name.toLowerCase()===name.toLowerCase())){
+            (cfg.tags = cfg.tags||[]).push({name, icon, color}); saveSettings(cfg); refreshList(); renderTags();
+            inputName.value=''; inputIcon.value=''; inputColor.value='#01FABF'; updatePreview(); inputName.focus();
+          } else {
+            showToast('Tag already exists');
+          }
+        }},[document.createTextNode('Add')]);
+
+        // wire preview update
+        function updatePreview(){ const name = (inputName.value||'').trim() || 'Preview'; const icon = (inputIcon.value||'').trim(); const color = inputColor.value || '#01FABF'; preview.innerHTML='';
+          const dot = el('span',{style:`width:12px;height:12px;border-radius:4px;background:${color};display:inline-block;`});
+          const txt = document.createTextNode((icon? icon+' ':'')+name);
+          preview.append(dot, txt);
+          preview.style.background = color + '22'; preview.style.borderColor = color;
+        }
+        inputName.addEventListener('input', updatePreview); inputIcon.addEventListener('input', updatePreview); inputColor.addEventListener('input', updatePreview);
+        inputName.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); addBtn.click(); } });
+        updatePreview();
+
+        header.append(inputName, inputIcon, inputColor, addBtn, preview);
+
         const list = el('div',{},[]);
         function refreshList(){ list.innerHTML=''; (cfg.tags||[]).forEach((t,i)=>{
           const row = el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px'},[
             el('input',{value:t.name,class:'input',style:'flex:1'}),
+            el('input',{value:t.icon,placeholder:'Emoji/Icon',style:'width:64px'}),
             el('input',{type:'color',value:t.color,style:'width:44px;height:36px;padding:4px;border-radius:8px;border:1px solid var(--line)'}),
-            el('div',{},[
+            el('div',{style:'display:flex;gap:6px;align-items:center'},[
               el('button',{class:'chip',onclick:()=>{ if(i>0){ const tmp = cfg.tags[i-1]; cfg.tags[i-1]=cfg.tags[i]; cfg.tags[i]=tmp; saveSettings(cfg); refreshList(); renderTags(); } }},[document.createTextNode('↑')]),
-              el('button',{class:'chip',onclick:()=>{ if(i<cfg.tags.length-1){ const tmp = cfg.tags[i+1]; cfg.tags[i+1]=cfg.tags[i]; cfg.tags[i]=tmp; saveSettings(cfg); refreshList(); renderTags(); } }},[document.createTextNode('↓')]),
+              el('button',{class:'chip',onclick:()=>{ if(i<cfg.tags.length-1){ const tmp = cfg.tags[i+1]; cfg.tags[i+1]=cfg.tags[i]; cfg.tags[i]=tmp; saveSettings(cfg); refreshList(); renderTags(); } }},[document.createTextNode('↓')])
             ]),
             el('button',{class:'chip',onclick:()=>{ cfg.tags.splice(i,1); saveSettings(cfg); refreshList(); renderTags(); }},[document.createTextNode('Delete')])
           ]);
           // wire inline edits
           row.querySelectorAll('input')[0].addEventListener('input', (e)=>{ cfg.tags[i].name = e.target.value; saveSettings(cfg); renderTags(); });
-          row.querySelectorAll('input')[1].addEventListener('input', (e)=>{ cfg.tags[i].color = e.target.value; saveSettings(cfg); renderTags(); });
+          row.querySelectorAll('input')[1].addEventListener('input', (e)=>{ cfg.tags[i].icon = e.target.value; saveSettings(cfg); renderTags(); });
+          row.querySelectorAll('input')[2].addEventListener('input', (e)=>{ cfg.tags[i].color = e.target.value; saveSettings(cfg); renderTags(); });
           list.append(row);
         }); }
+
         refreshList();
-        modalBody.append(list, el('div',{style:'height:8px'}), el('div',{class:'row',style:'justify-content:flex-end;gap:8px'},[
+
+        modalBody.append(header, list, el('div',{style:'height:8px'}), el('div',{class:'row',style:'justify-content:flex-end;gap:8px'},[
           el('button',{class:'chip',onclick:()=>{ // reorder: simple alphabetic
             cfg.tags.sort((a,b)=>a.name.localeCompare(b.name)); saveSettings(cfg); refreshList(); renderTags();
           }},[document.createTextNode('Sort A–Z')]),
           el('button',{class:'chip',onclick:()=>{ // merge duplicates
             const map = {}; cfg.tags.forEach(t=>{ map[t.name.toLowerCase()] = map[t.name.toLowerCase()] || t; }); cfg.tags = Object.values(map); saveSettings(cfg); refreshList(); renderTags(); }},[document.createTextNode('Merge duplicates')])
         ]));
-        openModal('Tag Manager', modalBody, ()=>{ return true; }, 'Close');
+
+        openModal('Tag Manager', modalBody, ()=>{ saveSettings(cfg); return true; }, 'Save');
       }
+
+        // Group Manager — manage named groups stored in settings
+        function openGroupManager(){
+          const modalBody = el('div',{},[]);
+          const cfg = loadSettings(); cfg.groups = cfg.groups || [];
+          const header = el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:12px'},[]);
+          const nameIn = el('input',{class:'input',placeholder:'New group name'});
+          const addBtn = el('button',{class:'btn primary',onclick:()=>{
+            const name = (nameIn.value||'').trim(); if(!name) return showToast('Enter a group name');
+            if(cfg.groups.some(g=>g.name.toLowerCase()===name.toLowerCase())) return showToast('Group exists');
+            cfg.groups.push({ name }); saveSettings(cfg); refreshList(); nameIn.value='';
+          }},[document.createTextNode('Add Group')]);
+          header.append(nameIn, addBtn);
+
+          const list = el('div',{},[]);
+          function refreshList(){ list.innerHTML=''; cfg.groups.forEach((g,i)=>{
+            const row = el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px'},[
+              el('input',{value:g.name,class:'input',style:'flex:1'}),
+              el('button',{class:'chip',onclick:()=>{ // rename handled inline
+                cfg.groups.splice(i,1); saveSettings(cfg); refreshList(); }},[document.createTextNode('Delete')])
+            ]);
+            row.querySelector('input').addEventListener('input',(e)=>{ cfg.groups[i].name = e.target.value; saveSettings(cfg); });
+            list.append(row);
+          }); }
+          refreshList();
+          modalBody.append(header, list);
+          openModal('Groups', modalBody, ()=>{ saveSettings(cfg); return true; }, 'Save');
+        }
         // Theme helpers
         function getThemeInputs(){ return {
           primary: (document.getElementById('themePrimary')||{}).value || '#01FABF',
@@ -2043,89 +2166,151 @@
     function renderContacts(){
       const wrap = el('div',{});
 
-      const privateCount = db.contacts.filter(c=>c.type==='Private Client').length;
-      const commercialCount = db.contacts.filter(c=>c.type==='Commercial Client').length;
+      // state for tabs/groups
+      let currentTab = 'contacts'; // contacts | favorites | recent | groups
+      let activeGroup = null;
 
-      wrap.append(el('div',{class:'stats'},[
-        stat('b-blue','phone','Total Contacts', db.contacts.length),
-        stat('b-green','user','Private Clients', privateCount),
-        stat('b-purple','user','Commercial Clients', commercialCount),
-        stat('b-yellow','shield','Suppliers', db.contacts.filter(c=>c.type==='Supplier').length),
-      ]));
-      wrap.append(el('div',{style:'height:12px'}));
-
-      const cardWrap = el('div',{class:'card pad'});
-      cardWrap.append(el('div',{class:'section-title',html:'Contacts'}));
-
-      const toolbar = el('div',{class:'row',style:'justify-content:space-between;align-items:center;margin-bottom:8px'},[]);
-      const left = el('div',{class:'search'},[ el('input',{class:'input',placeholder:'Search contacts...',id:'contactSearch'}) ]);
-      const right = el('div',{class:'toolbar'},[
-        el('select',{id:'contactFilter',class:'input',style:'width:auto'},[
-          el('option',{value:'all',html:'All Types'}),
-          el('option',{value:'Private Client',html:'Private Client'}),
-          el('option',{value:'Commercial Client',html:'Commercial Client'}),
-          el('option',{value:'Supplier',html:'Supplier'}),
-          el('option',{value:'Other',html:'Other'}),
-        ]),
-        el('select',{id:'contactTagFilter',class:'input',style:'width:auto;margin-left:6px'},[ el('option',{value:'all',html:'All Tags'}) ]),
-        el('button',{class:'chip',onclick:()=>openContactModal()},[document.createTextNode('+ Add Contact')])
+      // Top search + add
+      const top = el('div',{class:'contacts-top'},[]);
+      const searchRow = el('div',{class:'contacts-search-row'},[
+        el('div',{class:'contacts-search'},[ el('svg',{html:renderIcon('search'),style:'width:18px;height:18px;margin-right:8px'}), el('input',{id:'contactSearch',placeholder:'Search contacts, companies...',style:'font-size:16px;border:0;outline:none'}) ]),
+        el('button',{class:'contacts-add',onclick:()=>openContactModal()},[document.createTextNode('+')])
       ]);
-      toolbar.append(left,right);
-      cardWrap.append(toolbar);
+      top.append(searchRow);
 
-      const grid = el('div',{class:'contact-grid',id:'contactsGrid'});
-      cardWrap.append(grid);
-      wrap.append(cardWrap);
+      // Tabs
+      const tabContacts = el('button',{class:'contacts-tab active',id:'tabContacts'},[document.createTextNode('Contacts')]);
+      const tabFavorites = el('button',{class:'contacts-tab',id:'tabFavorites'},[document.createTextNode('Favorites')]);
+      const tabRecent = el('button',{class:'contacts-tab',id:'tabRecent'},[document.createTextNode('Recent')]);
+      const tabGroups = el('button',{class:'contacts-tab',id:'tabGroups'},[document.createTextNode('Groups')]);
+      const tabs = el('div',{class:'contacts-tabs'},[ tabContacts, tabFavorites, tabRecent, tabGroups ]);
+      top.append(tabs);
+
+      // Filter chips (dynamic from settings tags)
+      const chipWrap = el('div',{class:'filter-chips',id:'filterChips'},[]);
+      const cfg = loadSettings(); cfg.tags = cfg.tags || [];
+      // build chips: All, each tag, Others
+      const allBtn = el('button',{class:'filter-chip active',id:'chip-all',onclick:()=>{ document.querySelectorAll('.filter-chip').forEach(x=>x.classList.remove('active')); allBtn.classList.add('active'); refresh(); }},[document.createTextNode('All ('+db.contacts.length+')')]);
+      chipWrap.append(allBtn);
+      // tag chips
+      cfg.tags.forEach((t,i)=>{
+        const count = db.contacts.filter(c=> (c.tags||[]).some(x=> x && x.toLowerCase()===t.name.toLowerCase())).length;
+        const btn = el('button',{class:'filter-chip',id:'chip-'+t.name.toLowerCase().replace(/\s+/g,'-'),onclick:()=>{ document.querySelectorAll('.filter-chip').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); refresh(); }},[ el('span',{style:`display:inline-block;width:10px;height:10px;border-radius:4px;background:${t.color||'#01FABF'};margin-right:8px`}), document.createTextNode((t.icon? t.icon+' ':'')+t.name + ' ('+count+')') ]);
+        chipWrap.append(btn);
+      });
+      // Others chip (contacts without any tag)
+      const othersCount = db.contacts.filter(c=> !(c.tags||[]).length).length;
+      const othersBtn = el('button',{class:'filter-chip',id:'chip-others',onclick:()=>{ document.querySelectorAll('.filter-chip').forEach(x=>x.classList.remove('active')); othersBtn.classList.add('active'); refresh(); }},[document.createTextNode('Others ('+othersCount+')')]);
+      chipWrap.append(othersBtn);
+      top.append(chipWrap);
+
+      wrap.append(top);
+
+      const listArea = el('div',{},[]);
+      wrap.append(listArea);
       $('#view').innerHTML=''; $('#view').append(wrap);
 
-      function cardFor(c){
-        const left = el('div',{},[
-          el('div',{class:'contact-name',html:c.name||'(no name)'}),
-          el('div',{class:'contact-meta',html:[
-            c.type||'Other',
-            c.company?` • ${c.company}`:'',
-            (c.phone||c.email)?`<br>${c.phone||''}${c.email?(' • '+c.email):''}`:'',
-          ].join('') + (c.tags && c.tags.length ? ('<div style="height:6px"></div>' + c.tags.map(t=>`<span class="chip" style="display:inline-block;margin-right:6px;background:var(--nav-hover)">${t}</span>`).join('')) : '')})
-        ]);
+      // wire tab clicks
+      [tabContacts, tabFavorites, tabRecent, tabGroups].forEach(btn=> btn.addEventListener('click', ()=>{
+        currentTab = btn.id.replace('tab','').toLowerCase();
+        document.querySelectorAll('.contacts-tab').forEach(x=>x.classList.remove('active'));
+        btn.classList.add('active');
+        // reset active group when switching away
+        if(currentTab !== 'groups') activeGroup = null;
+        refresh();
+      }));
 
-        const actions = el('div',{class:'contact-actions'},[
-          c.phone ? el('button',{class:'btn sm',onclick:(e)=>{e.stopPropagation();copyText(c.phone)}},[el('span',{html:renderIcon('copy')}),document.createTextNode('Copy Phone')]) : null,
-          c.email ? el('button',{class:'btn sm',onclick:(e)=>{e.stopPropagation();copyText(c.email)}},[el('span',{html:renderIcon('copy')}),document.createTextNode('Copy Email')]) : null,
-          el('button',{class:'btn sm',onclick:(e)=>{e.stopPropagation();openContactModal(c)}},[document.createTextNode('Edit')]),
-          el('button',{class:'btn sm danger',onclick:(e)=>{e.stopPropagation(); if(confirm('Delete contact?')){ db.contacts = db.contacts.filter(x=>x.id!==c.id); persist(); refresh(); }}},[document.createTextNode('Delete')]),
+      function createCard(c){
+        // avatar removed (no images)
+        const body = el('div',{class:'cc-body'},[
+          el('div',{class:'cc-name',html:c.name||'(no name)'}),
+          el('div',{class:'cc-company',html:c.company||''}),
+          el('div',{style:'height:8px'}),
+          el('div',{class:'cc-tags'}, (c.tags||[]).filter(Boolean).map(tname=>{
+            const settings = loadSettings(); const tag = (settings.tags||[]).find(x=>x.name===tname) || {name:tname,color:'#E7EDF4',icon:''};
+            const pill = el('div',{class:'tag-pill',style:`background:${tag.color}22;border-color:${tag.color};display:inline-flex;align-items:center;margin-right:8px;position:relative;padding-right:28px`},[
+              el('span',{class:'dot',style:`background:${tag.color}`}), document.createTextNode((tag.icon? tag.icon+' ':'')+tag.name),
+              el('button',{class:'chip',title:'Remove tag',style:'position:absolute;right:4px;top:4px;padding:4px;height:20px;line-height:12px;'},[document.createTextNode('×')])
+            ]);
+            // remove handler with undo
+            pill.querySelectorAll('button')[0].addEventListener('click',(e)=>{
+              e.stopPropagation();
+              const prev = (c.tags||[]).slice();
+              c.tags = (c.tags||[]).filter(x=>x!==tname);
+              persist(); renderContacts();
+              showUndoToast('Tag removed', ()=>{ c.tags = prev; persist(); renderContacts(); });
+            });
+            return pill;
+          }))
+        ]);
+        const favBtn = el('button',{class:'btn sm',title:(c.favorite? 'Unfavorite':'Add to favorites'),onclick:(e)=>{ e.stopPropagation(); c.favorite = !c.favorite; persist(); renderContacts(); }},[document.createTextNode(c.favorite? '★':'☆')]);
+        const right = el('div',{style:'display:flex;flex-direction:column;gap:8px;align-items:flex-end'},[
+          c.phone ? el('button',{class:'btn sm',onclick:(e)=>{ e.stopPropagation(); copyText(c.phone); }},[el('span',{html:renderIcon('copy')}),document.createTextNode('Copy')]) : null,
+          el('div',{},[ favBtn, el('button',{class:'btn',onclick:(e)=>{ e.stopPropagation(); openContactModal(c); }},[document.createTextNode('Edit')]) ])
         ].filter(Boolean));
 
-        const card = el('div',{class:'contact-card',onclick:()=>viewContactModal(c)},[left, actions]);
+        const card = el('div',{class:'contact-card-elevated',onclick:()=>viewContactModal(c)},[ body, right ]);
         return card;
       }
 
       function refresh(){
         const q = $('#contactSearch').value?.toLowerCase() || '';
-        const f = $('#contactFilter').value;
-        grid.innerHTML='';
+        listArea.innerHTML='';
 
+        // Recent tab shows a compact recent list
+        if(currentTab === 'recent'){
+          const recentEl = renderRecentContacts();
+          listArea.append(recentEl);
+          return;
+        }
+
+        // Groups tab: show groups manager and group chips
+        if(currentTab === 'groups'){
+          const settings = loadSettings(); const groups = settings.groups || [];
+          const header = el('div',{class:'row',style:'justify-content:space-between;align-items:center;margin-bottom:8px'},[
+            el('div',{},[ el('strong',{},[document.createTextNode('Groups')]) ]),
+            el('div',{},[ el('button',{class:'chip',onclick:()=>openGroupManager()},[document.createTextNode('Manage Groups')]) ])
+          ]);
+          listArea.append(header);
+          const groupBar = el('div',{style:'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px'},[]);
+          groups.forEach(g=>{
+            const btn = el('button',{class:'filter-chip',onclick:()=>{ activeGroup = g.name; document.querySelectorAll('.filter-chip').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); refresh(); }},[document.createTextNode(g.name + ' (' + (db.contacts.filter(c=> (c.groups||[]).includes(g.name)).length) + ')')]);
+            if(activeGroup === g.name) btn.classList.add('active');
+            groupBar.append(btn);
+          });
+          listArea.append(groupBar);
+          // show members of selected group or hint
+          if(!activeGroup){ listArea.append(el('div',{class:'empty',html:'Select a group above to view members.'})); return; }
+          let items = db.contacts.filter(c=> (c.groups||[]).includes(activeGroup));
+          if(!items.length){ listArea.append(el('div',{class:'empty',html:'No members in this group yet.'})); return; }
+          items.forEach(c=> listArea.append(createCard(c)));
+          return;
+        }
+
+        // Default contacts/favorites listing
         let items = db.contacts.filter(c => (
           (c.name||'').toLowerCase().includes(q) ||
           (c.company||'').toLowerCase().includes(q) ||
           (c.email||'').toLowerCase().includes(q) ||
           (c.phone||'').toLowerCase().includes(q)
         ));
-  if(f!=='all') items = items.filter(c=> (c.type||'Other')===f);
-  const tf = $('#contactTagFilter') ? $('#contactTagFilter').value : 'all';
-  if(tf && tf!=='all') items = items.filter(c=> (c.tags||[]).includes(tf));
+
+  // chip filters (based on tags)
+  const activeChip = (Array.from(document.querySelectorAll('.filter-chip')).find(x=>x.classList.contains('active'))||{}).id || 'chip-all';
+  if(activeChip === 'chip-clients') items = items.filter(c=> (c.tags||[]).some(t=> t && t.toLowerCase()==='client'));
+  if(activeChip === 'chip-suppliers') items = items.filter(c=> (c.tags||[]).some(t=> t && t.toLowerCase()==='supplier'));
+  // Others: contacts that don't have client or supplier tags
+  if(activeChip === 'chip-others') items = items.filter(c=> !(c.tags||[]).some(t=> t && (t.toLowerCase()==='client' || t.toLowerCase()==='supplier')));
+
+        if(currentTab === 'favorites') items = items.filter(c => !!c.favorite);
 
         items.sort((a,b)=> (a.name||'').localeCompare(b.name||'', undefined, {sensitivity:'base'}));
 
-        if(!items.length){
-          grid.append(el('div',{class:'empty',html:'No contacts yet. Add your first contact to get started.'}));
-          return;
-        }
-        items.forEach(c=> grid.append(cardFor(c)));
+        if(!items.length){ listArea.append(el('div',{class:'empty',html:'No contacts yet. Add your first contact to get started.'})); return; }
+        items.forEach(c=> listArea.append(createCard(c)));
       }
+
       $('#contactSearch').addEventListener('input',refresh);
-      $('#contactFilter').addEventListener('change',refresh);
-      // populate contact tag filter
-      (function populateContactTagFilter(){ const sel = $('#contactTagFilter'); if(!sel) return; const settings = loadSettings(); (settings.tags||[]).forEach(t=> sel.append(el('option',{value:t.name,html:t.name}))); sel.addEventListener('change',refresh); })();
       refresh();
     }
 
@@ -2685,11 +2870,16 @@
       ]);
       openModal(title, body, ()=>{
         if(!nameIn.value.trim()){ alert('Name is required.'); return false; }
+        // collect tags from DOM-selected toggles and from the modal wrapper's transient selection set
+        const domTags = Array.from(document.querySelectorAll('#contactTagWrap .tag-toggle.selected')).map(n=>n.dataset.tag).filter(Boolean);
+        const wrapEl = document.getElementById('contactTagWrap');
+        const wrapTags = wrapEl && wrapEl._selected ? Array.from(wrapEl._selected).filter(Boolean) : [];
+        const tagSet = new Set([...domTags, ...wrapTags]);
         const payload = {
           name: nameIn.value.trim(),
           company: companyIn.value.trim(),
           type: typeSel.value,
-          tags: Array.from(document.querySelectorAll('#contactTagWrap .tag-toggle.selected')).map(n=>n.dataset.tag),
+          tags: Array.from(tagSet),
           phone: phoneIn.value.trim(),
           email: emailIn.value.trim()
         };
@@ -2697,16 +2887,55 @@
         persist(); renderContacts(); return true;
       }, contact?'Save':'Add Contact');
 
-      // render available tags as toggles
+      // render available tags as toggles with inline add (supports new contact flow)
       (function renderContactTagOptions(){
         const wrap = document.getElementById('contactTagWrap'); if(!wrap) return;
+        // preserve selection state on the wrapper element so it survives re-renders
+        wrap._selected = wrap._selected || new Set((contact && contact.tags) ? contact.tags.slice() : []);
         wrap.innerHTML='';
         const settings = loadSettings();
+        // ensure sensible default tags exist so tag options are available when adding a contact
+        if(!settings.tags || !settings.tags.length){
+          settings.tags = [
+            { name: 'Client', color: '#01FABF', icon: '👤' },
+            { name: 'Supplier', color: '#FF8A65', icon: '🏭' }
+          ];
+          saveSettings(settings);
+        }
+
+        // header: quick add tag input
+        const header = el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap'},[]);
+        const newTagIn = el('input',{class:'input',placeholder:'New tag name',style:'min-width:140px'});
+        const newTagBtn = el('button',{class:'chip',onclick:()=>{
+          const name = (newTagIn.value||'').trim(); if(!name) return showToast('Enter a tag name');
+          // avoid duplicates
+          if((settings.tags||[]).some(t=>t.name.toLowerCase()===name.toLowerCase())){ showToast('Tag already exists'); return; }
+          const color = '#01FABF'; const icon = '';
+          settings.tags.push({ name, color, icon }); saveSettings(settings);
+          // mark selected for this modal
+          wrap._selected.add(name);
+          newTagIn.value='';
+          // re-render to show the new tag and its selected state
+          renderContactTagOptions();
+        }},[document.createTextNode('+ Add Tag')]);
+        header.append(newTagIn, newTagBtn);
+        wrap.append(header);
+
         (settings.tags||[]).forEach(t=>{
-          const btn = el('button',{class:'chip tag-toggle',dataset:{tag:t.name},onclick:(e)=>{ e.preventDefault(); e.currentTarget.classList.toggle('selected'); }},[document.createTextNode(t.name)]);
+          const btn = el('button',{class:'tag-toggle',dataset:{tag:t.name},style:`display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid ${t.color||'#E7EDF4'};background:${(t.color||'#01FABF')}22;cursor:pointer`},[ el('span',{style:`width:10px;height:10px;border-radius:4px;background:${t.color||'#01FABF'}`}), document.createTextNode((t.icon? t.icon+' ':'')+t.name) ]);
+          btn.addEventListener('click',(e)=>{
+            e.preventDefault();
+            const isSelected = btn.classList.toggle('selected');
+            if(contact){ contact.tags = contact.tags || []; if(isSelected){ if(!contact.tags.includes(t.name)) contact.tags.push(t.name); } else { contact.tags = contact.tags.filter(x=>x!==t.name); } }
+            else { if(isSelected) wrap._selected.add(t.name); else wrap._selected.delete(t.name); }
+          });
+          // initial selected state from persisted contact or wrapper state
           if(contact && (contact.tags||[]).includes(t.name)) btn.classList.add('selected');
+          if(!contact && wrap._selected.has(t.name)) btn.classList.add('selected');
           wrap.append(btn);
         });
+
+        // ensure modal submit picks up the wrapper._selected for new contacts if DOM wasn't updated
       })();
     }
 
@@ -2741,6 +2970,7 @@
         formField('Company', companyIn),
         formField('Type', typeSel),
         formField('Tags', el('div',{id:'viewContactTags',style:'display:flex;gap:8px;flex-wrap:wrap'},[])),
+        formField('Groups', el('div',{id:'viewContactGroups',style:'display:flex;gap:8px;flex-wrap:wrap'},[])),
         formField('Phone', phoneIn),
         formField('Email', emailIn),
       ]);
@@ -2755,12 +2985,45 @@
         el('div',{class:'grid-2'},[leftCol, rightCol])
       ]);
 
-      // render existing tags in details view
+      // render existing tags in details view (ensure defaults + allow inline add)
       (function renderViewContactTags(){
         const wrap = document.getElementById('viewContactTags'); if(!wrap) return; wrap.innerHTML='';
-        const settings = loadSettings(); (settings.tags||[]).forEach(t=>{
-          const chip = el('div',{class:'chip',dataset:{tag:t.name},style:`background:${t.color}22;border-color:${t.color}`},[document.createTextNode(t.name)]);
+        const settings = loadSettings();
+        // ensure sensible defaults so tags are selectable even if Settings hasn't been opened
+        if(!settings.tags || !settings.tags.length){
+          settings.tags = [ { name: 'Client', color: '#01FABF', icon: '👤' }, { name: 'Supplier', color: '#FF8A65', icon: '🏭' } ];
+          saveSettings(settings);
+        }
+
+        // inline add control
+        const header = el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap'},[]);
+        const newTagInView = el('input',{class:'input',placeholder:'Add tag',style:'min-width:140px'});
+        const addBtnView = el('button',{class:'chip',onclick:()=>{
+          const name = (newTagInView.value||'').trim(); if(!name) return showToast('Enter a tag name');
+          if((settings.tags||[]).some(t=>t.name.toLowerCase()===name.toLowerCase())){ showToast('Tag exists'); return; }
+          const tagObj = { name, color: '#01FABF', icon: '' };
+          settings.tags.push(tagObj); saveSettings(settings);
+          contact.tags = contact.tags || [];
+          if(!contact.tags.includes(name)) contact.tags.push(name);
+          newTagInView.value=''; renderViewContactTags();
+        }},[document.createTextNode('+')]);
+        header.append(newTagInView, addBtnView);
+        wrap.append(header);
+
+        (settings.tags||[]).forEach(t=>{
+          const chip = el('div',{class:'chip',dataset:{tag:t.name},style:`display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:${(t.color||'#01FABF')}22;border-color:${t.color||'#01FABF'}`},[ el('span',{style:`width:10px;height:10px;border-radius:4px;background:${t.color||'#01FABF'}`}), document.createTextNode((t.icon? t.icon+' ':'')+t.name) ]);
           if((contact.tags||[]).includes(t.name)) chip.classList.add('selected');
+          chip.addEventListener('click',(e)=>{ e.currentTarget.classList.toggle('selected'); });
+          wrap.append(chip);
+        });
+      })();
+
+      // render groups in details view
+      (function renderViewContactGroups(){
+        const wrap = document.getElementById('viewContactGroups'); if(!wrap) return; wrap.innerHTML='';
+        const settings = loadSettings(); (settings.groups||[]).forEach(g=>{
+          const chip = el('div',{class:'chip',dataset:{group:g.name},style:`display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:transparent`},[ document.createTextNode(g.name) ]);
+          if((contact.groups||[]).includes(g.name)) chip.classList.add('selected');
           chip.addEventListener('click',(e)=>{ e.currentTarget.classList.toggle('selected'); });
           wrap.append(chip);
         });
@@ -2776,12 +3039,44 @@
           address: addressIn.value.trim(),
           jobRefs: refsIn.value.trim(),
           notes: notesIn.value.trim(),
-          tags: Array.from(document.querySelectorAll('#viewContactTags .chip.selected')).map(n=>n.dataset.tag)
+          tags: Array.from(document.querySelectorAll('#viewContactTags .chip.selected')).map(n=>n.dataset.tag),
+          groups: Array.from(document.querySelectorAll('#viewContactGroups .chip.selected')).map(n=>n.dataset.group)
         });
         persist();
         renderContacts();
         return true;
-      }, 'Save Changes', { className:'wide' });
+      }, 'Save Changes', { className:'wide', 
+        // add a Danger/Delete button in the modal footer by leveraging opts (we add a small hack: footer is built inside openModal) - instead we will show a confirm here before calling save
+      });
+
+      // Also add a small inline delete control inside modal (below body) for convenience
+      // Note: We can't directly add another footer button via openModal API, so provide an explicit delete action tied to this modal instance
+      (function attachDeleteButtonToModal(){
+        const bd = $('#modalBackdrop');
+        let attempts = 0;
+        function tryAttach(){
+          attempts++;
+          const modal = bd && bd.querySelector ? bd.querySelector('.modal') : null;
+          const footer = modal ? modal.querySelector('.footer') : null;
+          if(!footer){ if(attempts < 6) return setTimeout(tryAttach, 80); return; }
+          // create button and attach via addEventListener to avoid being overwritten
+          const del = el('button',{class:'btn danger',title:'Delete contact'},[document.createTextNode('Delete')]);
+          del.addEventListener('click', (e)=>{
+            e.stopPropagation();
+            if(!confirm('Delete contact?')) return;
+            const idx = db.contacts.findIndex(x=>x.id===contact.id);
+            if(idx === -1) return;
+            const backup = db.contacts[idx];
+            db.contacts.splice(idx,1); persist(); renderContacts();
+            // close modal
+            const closer = bd.querySelector('.close-x'); if(closer) closer.click();
+            showUndoToast('Contact deleted', ()=>{ db.contacts.splice(idx,0,backup); persist(); renderContacts(); });
+          });
+          // insert delete before cancel
+          footer.insertBefore(del, footer.firstChild);
+        }
+        tryAttach();
+      })();
     }
 
     function openProjectModal(project){
@@ -2836,7 +3131,7 @@
       }, project?'Save':'Add Project');
 
   // render project tag options
-  (function renderProjectTagOptions(){ const wrap = document.getElementById('projectTagWrap'); if(!wrap) return; wrap.innerHTML=''; const settings = loadSettings(); (settings.tags||[]).forEach(t=>{ const btn = el('button',{class:'chip tag-toggle',dataset:{tag:t.name},onclick:(e)=>{ e.preventDefault(); e.currentTarget.classList.toggle('selected'); }},[document.createTextNode(t.name)]); if(project && (project.tags||[]).includes(t.name)) btn.classList.add('selected'); wrap.append(btn); }); })();
+  (function renderProjectTagOptions(){ const wrap = document.getElementById('projectTagWrap'); if(!wrap) return; wrap.innerHTML=''; const settings = loadSettings(); (settings.tags||[]).forEach(t=>{ const btn = el('button',{class:'tag-toggle',dataset:{tag:t.name},style:`display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid ${t.color||'#E7EDF4'};background:${(t.color||'#01FABF')}22;cursor:pointer`,onclick:(e)=>{ e.preventDefault(); e.currentTarget.classList.toggle('selected'); }},[ el('span',{style:`width:10px;height:10px;border-radius:4px;background:${t.color||'#01FABF'}`}), document.createTextNode((t.icon? t.icon+' ':'')+t.name) ]); if(project && (project.tags||[]).includes(t.name)) btn.classList.add('selected'); wrap.append(btn); }); })();
     }
 
     /* ===== Logs feature ===== */
@@ -3277,7 +3572,7 @@
       }, supplier?'Save':'Add Supplier');
 
   // render supplier tag options
-  (function renderSupplierTagOptions(){ const wrap = document.getElementById('supplierTagWrap'); if(!wrap) return; wrap.innerHTML=''; const settings = loadSettings(); (settings.tags||[]).forEach(t=>{ const btn = el('button',{class:'chip tag-toggle',dataset:{tag:t.name},onclick:(e)=>{ e.preventDefault(); e.currentTarget.classList.toggle('selected'); }},[document.createTextNode(t.name)]); if(supplier && (supplier.tags||[]).includes(t.name)) btn.classList.add('selected'); wrap.append(btn); }); })();
+  (function renderSupplierTagOptions(){ const wrap = document.getElementById('supplierTagWrap'); if(!wrap) return; wrap.innerHTML=''; const settings = loadSettings(); (settings.tags||[]).forEach(t=>{ const btn = el('button',{class:'tag-toggle',dataset:{tag:t.name},style:`display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid ${t.color||'#E7EDF4'};background:${(t.color||'#01FABF')}22;cursor:pointer`,onclick:(e)=>{ e.preventDefault(); e.currentTarget.classList.toggle('selected'); }},[ el('span',{style:`width:10px;height:10px;border-radius:4px;background:${t.color||'#01FABF'}`}), document.createTextNode((t.icon? t.icon+' ':'')+t.name) ]); if(supplier && (supplier.tags||[]).includes(t.name)) btn.classList.add('selected'); wrap.append(btn); }); })();
     }
 
     /************ Brand Logo Upload (shared) ************/
